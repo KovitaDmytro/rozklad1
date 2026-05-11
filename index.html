@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Розклад занять</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f4f6f8;min-height:100vh}
+
+  .header{background:#1D9E75;padding:13px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+  .logo{font-size:18px;font-weight:600;color:#fff;display:flex;align-items:center;gap:8px}
+  .admin-badge{background:#085041;color:#9FE1CB;font-size:11px;padding:3px 10px;border-radius:20px;font-weight:600;display:none;align-items:center;gap:4px}
+  .login-btn{display:flex;align-items:center;gap:6px;padding:7px 15px;border-radius:8px;border:2px solid rgba(255,255,255,.5);background:transparent;cursor:pointer;font-size:13px;color:#fff;font-weight:500;transition:all .15s}
+  .login-btn:hover{background:rgba(255,255,255,.15)}
+  .logout-btn{display:none;align-items:center;gap:6px;padding:7px 15px;border-radius:8px;border:2px solid #F09595;background:transparent;cursor:pointer;font-size:13px;color:#FCEBEB;font-weight:500}
+  .logout-btn:hover{background:rgba(242,75,74,.25)}
+
+  .content{padding:20px 24px;max-width:960px;margin:0 auto}
+
+  .info-bar{background:#E1F5EE;border:1.5px solid #9FE1CB;border-radius:10px;padding:10px 15px;font-size:13px;color:#085041;display:flex;align-items:center;gap:8px;margin-bottom:16px;font-weight:500}
+
+  .toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px}
+  .filters{display:flex;gap:6px;flex-wrap:wrap}
+  .filter-btn{padding:6px 14px;border-radius:20px;border:2px solid #B4B2A9;background:#fff;cursor:pointer;font-size:13px;color:#5F5E5A;font-weight:500;transition:all .15s}
+  .filter-btn:hover{border-color:#1D9E75;color:#1D9E75}
+  .filter-btn.active{background:#1D9E75;color:#fff;border-color:#1D9E75}
+  .filter-btn.sat{border-color:#85B7EB;color:#185FA5}
+  .filter-btn.sat.active{background:#185FA5;border-color:#185FA5;color:#fff}
+
+  .add-btn{display:none;align-items:center;gap:6px;padding:8px 18px;border-radius:8px;border:none;background:#1D9E75;color:#fff;cursor:pointer;font-size:13px;font-weight:600;transition:all .15s;box-shadow:0 2px 8px rgba(29,158,117,.35)}
+  .add-btn:hover{background:#0F6E56}
+
+  .days-grid{display:flex;flex-direction:column;gap:14px}
+
+  .day-block{background:#fff;border-radius:14px;overflow:hidden;border:2px solid #e0e0e0}
+  .day-block.sat{border-color:#85B7EB}
+  .day-header{padding:11px 18px;display:flex;align-items:center;justify-content:space-between}
+  .day-mon .day-header{background:#E1F5EE}
+  .day-tue .day-header{background:#EEEDFE}
+  .day-wed .day-header{background:#FAEEDA}
+  .day-thu .day-header{background:#E6F1FB}
+  .day-fri .day-header{background:#FBEAF0}
+  .day-sat .day-header{background:#B5D4F4}
+  .day-name{font-weight:600;font-size:14px}
+  .day-mon .day-name{color:#085041}
+  .day-tue .day-name{color:#3C3489}
+  .day-wed .day-name{color:#633806}
+  .day-thu .day-name{color:#0C447C}
+  .day-fri .day-name{color:#72243E}
+  .day-sat .day-name{color:#042C53}
+  .day-count{font-size:12px;color:#888}
+
+  .lessons{padding:10px}
+  .lesson-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;border:1.5px solid #f0f0f0;margin-bottom:6px;background:#fafafa;transition:all .15s;flex-wrap:wrap}
+  .lesson-row:last-child{margin-bottom:0}
+  .lesson-row:hover{border-color:#ddd;background:#fff}
+
+  .time-col{min-width:64px;font-size:13px;font-weight:600;color:#555;line-height:1.4}
+  .time-dur{font-size:11px;color:#aaa;font-weight:400}
+  .subject-col{flex:1;min-width:160px}
+  .subject-name{font-size:14px;font-weight:600;color:#1a1a1a}
+  .subject-meta{font-size:12px;color:#888;margin-top:2px}
+
+  .type-badge{font-size:11px;padding:3px 9px;border-radius:20px;font-weight:600;white-space:nowrap}
+  .type-lec{background:#E6F1FB;color:#0C447C;border:1.5px solid #85B7EB}
+  .type-prac{background:#E1F5EE;color:#085041;border:1.5px solid #5DCAA5}
+  .type-lab{background:#FAEEDA;color:#633806;border:1.5px solid #FAC775}
+  .type-sem{background:#EEEDFE;color:#3C3489;border:1.5px solid #AFA9EC}
+
+  .room-badge{font-size:12px;color:#666;display:flex;align-items:center;gap:3px;background:#fff;padding:3px 9px;border-radius:6px;border:1.5px solid #ddd;white-space:nowrap}
+
+  .actions{display:flex;gap:6px;flex-shrink:0}
+  .btn-edit{display:flex;align-items:center;gap:4px;padding:6px 12px;border-radius:7px;border:2px solid #85B7EB;background:#E6F1FB;cursor:pointer;font-size:12px;color:#0C447C;font-weight:600;transition:all .15s}
+  .btn-edit:hover{background:#B5D4F4;border-color:#378ADD}
+  .btn-del{display:flex;align-items:center;gap:4px;padding:6px 12px;border-radius:7px;border:2px solid #F09595;background:#FCEBEB;cursor:pointer;font-size:12px;color:#791F1F;font-weight:600;transition:all .15s}
+  .btn-del:hover{background:#F7C1C1;border-color:#E24B4A}
+
+  .empty-day{padding:18px;font-size:13px;color:#aaa;text-align:center}
+  .loading{padding:50px;text-align:center;color:#888;font-size:14px}
+
+  .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center}
+  .overlay.open{display:flex}
+  .modal{background:#fff;border-radius:16px;border:2px solid #e0e0e0;padding:24px;width:390px;max-width:96vw;box-shadow:0 8px 32px rgba(0,0,0,.15)}
+  .modal-title{font-size:16px;font-weight:600;margin-bottom:18px;color:#1a1a1a;display:flex;align-items:center;gap:8px}
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:11px;color:#888;margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+  .field input,.field select{width:100%;padding:9px 12px;border-radius:8px;border:2px solid #ddd;background:#fff;color:#1a1a1a;font-size:13px;font-family:inherit;transition:border .15s}
+  .field input:focus,.field select:focus{outline:none;border-color:#1D9E75}
+  .field-row{display:flex;gap:10px}
+  .field-row .field{flex:1}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+  .btn-cancel{padding:8px 16px;border-radius:8px;border:2px solid #ddd;background:transparent;cursor:pointer;font-size:13px;color:#666;font-weight:500}
+  .btn-cancel:hover{background:#f5f5f5}
+  .btn-save{padding:8px 16px;border-radius:8px;border:none;background:#1D9E75;color:#fff;cursor:pointer;font-size:13px;font-weight:600}
+  .btn-save:hover{background:#0F6E56}
+  .btn-del-confirm{padding:8px 16px;border-radius:8px;border:none;background:#E24B4A;color:#fff;cursor:pointer;font-size:13px;font-weight:600}
+  .btn-del-confirm:hover{background:#A32D2D}
+  .login-err{font-size:12px;color:#791F1F;display:none;margin-top:6px;padding:7px 11px;background:#FCEBEB;border-radius:7px;border:1.5px solid #F09595}
+
+  .toast{position:fixed;bottom:22px;right:22px;border-radius:10px;padding:11px 18px;font-size:13px;font-weight:600;z-index:300;display:flex;align-items:center;gap:8px;transform:translateY(70px);opacity:0;transition:all .25s;pointer-events:none}
+  .toast.green{background:#1D9E75;color:#fff}
+  .toast.red{background:#E24B4A;color:#fff}
+  .toast.show{transform:translateY(0);opacity:1}
+
+  @media(max-width:600px){
+    .content{padding:12px}
+    .lesson-row{gap:7px}
+    .actions{width:100%;justify-content:flex-end;margin-top:4px}
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div style="display:flex;align-items:center;gap:10px">
+    <div class="logo"><i class="ti ti-calendar"></i> Розклад занять</div>
+    <span class="admin-badge" id="adminBadge"><i class="ti ti-shield-check"></i> Адміністратор</span>
+  </div>
+  <div style="display:flex;gap:8px">
+    <button class="login-btn" id="loginBtn" onclick="openLogin()"><i class="ti ti-lock"></i> Вхід адміна</button>
+    <button class="logout-btn" id="logoutBtn" onclick="doLogout()"><i class="ti ti-logout"></i> Вийти</button>
+  </div>
+</div>
+
+<div class="content">
+  <div class="info-bar" id="infoBar">
+    <i class="ti ti-info-circle"></i> Перегляд відкритий для всіх — реєстрація не потрібна. Редагування лише для адміністратора.
+  </div>
+  <div class="toolbar">
+    <div class="filters">
+      <button class="filter-btn active" onclick="filterDay('all',this)">Всі дні</button>
+      <button class="filter-btn" onclick="filterDay('Понеділок',this)">Пн</button>
+      <button class="filter-btn" onclick="filterDay('Вівторок',this)">Вт</button>
+      <button class="filter-btn" onclick="filterDay('Середа',this)">Ср</button>
+      <button class="filter-btn" onclick="filterDay('Четвер',this)">Чт</button>
+      <button class="filter-btn" onclick="filterDay('Пятниця',this)">Пт</button>
+      <button class="filter-btn sat" onclick="filterDay('Субота',this)">Сб</button>
+    </div>
+    <button class="add-btn" id="addBtn" onclick="openAdd()"><i class="ti ti-plus"></i> Додати заняття</button>
+  </div>
+  <div class="days-grid" id="daysGrid">
+    <div class="loading"><i class="ti ti-loader"></i> Завантаження...</div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
+<div class="toast" id="toast"><span id="toastMsg"></span></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, onValue, push, update, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBprMBFWe64a4sB8dH6icebTp5In5voFPk",
+  authDomain: "rozklad-zanyat.firebaseapp.com",
+  databaseURL: "https://rozklad-zanyat-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "rozklad-zanyat",
+  storageBucket: "rozklad-zanyat.firebasestorage.app",
+  messagingSenderId: "490622824125",
+  appId: "1:490622824125:web:91385f2c144b613fd391d4"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const auth = getAuth(app);
+
+let isAdmin = false;
+let activeDay = 'all';
+let lessons = {};
+
+const days = ['Понеділок','Вівторок','Середа','Четвер','Пятниця','Субота'];
+const dayCls = {Понеділок:'day-mon',Вівторок:'day-tue',Середа:'day-wed',Четвер:'day-thu',Пятниця:'day-fri',Субота:'day-sat'};
+const typeLabels = {lec:'Лекція',prac:'Практика',lab:'Лабораторна',sem:'Семінар'};
+const lessonsRef = ref(db, 'lessons');
+
+// Слухаємо базу в реальному часі
+onValue(lessonsRef, (snap) => {
+  lessons = snap.val() || {};
+  render();
+});
+
+// Стежимо за авторизацією
+onAuthStateChanged(auth, (user) => {
+  isAdmin = !!user;
+  document.getElementById('adminBadge').style.display = isAdmin ? 'inline-flex' : 'none';
+  document.getElementById('loginBtn').style.display = isAdmin ? 'none' : 'flex';
+  document.getElementById('logoutBtn').style.display = isAdmin ? 'flex' : 'none';
+  document.getElementById('addBtn').style.display = isAdmin ? 'flex' : 'none';
+  document.getElementById('infoBar').style.display = isAdmin ? 'none' : 'flex';
+  render();
+});
+
+function render() {
+  const grid = document.getElementById('daysGrid');
+  const filtered = activeDay === 'all' ? days : days.filter(d => d === activeDay);
+
+  grid.innerHTML = filtered.map(day => {
+    const dl = Object.entries(lessons)
+      .filter(([, l]) => l.day === day)
+      .sort((a, b) => a[1].time.localeCompare(b[1].time));
+
+    const cls = dayCls[day] || '';
+    const isSat = day === 'Субота';
+
+    const rows = dl.length
+      ? dl.map(([id, l]) => `
+        <div class="lesson-row">
+          <div class="time-col">${l.time}<div class="time-dur">${l.dur} год</div></div>
+          <div class="subject-col">
+            <div class="subject-name">${l.subject}</div>
+            <div class="subject-meta"><i class="ti ti-user" style="font-size:11px"></i> ${l.teacher}</div>
+          </div>
+          <span class="type-badge type-${l.type}">${typeLabels[l.type] || l.type}</span>
+          <span class="room-badge"><i class="ti ti-door" style="font-size:13px"></i>${l.room}</span>
+          ${isAdmin ? `<div class="actions">
+            <button class="btn-edit" onclick="openEdit('${id}')"><i class="ti ti-edit"></i> Змінити</button>
+            <button class="btn-del" onclick="confirmDelete('${id}')"><i class="ti ti-trash"></i> Видалити</button>
+          </div>` : ''}
+        </div>`).join('')
+      : `<div class="empty-day"><i class="ti ti-calendar-off"></i> Занять немає${isAdmin ? ' — натисніть «Додати заняття»' : ''}</div>`;
+
+    return `<div class="day-block ${isSat ? 'sat' : ''} ${cls}">
+      <div class="day-header">
+        <span class="day-name">${isSat ? '📅 ' : ''}${day}</span>
+        <span class="day-count">${dl.length} занять</span>
+      </div>
+      <div class="lessons">${rows}</div>
+    </div>`;
+  }).join('');
+}
+
+function formHTML(id, l) {
+  return `
+    <div class="modal-title"><i class="ti ti-${l ? 'edit' : 'plus'}"></i> ${l ? 'Редагувати заняття' : 'Нове заняття'}</div>
+    <div class="field"><label>Предмет</label><input id="fSubject" value="${l ? l.subject : ''}" placeholder="Назва предмету"></div>
+    <div class="field"><label>Викладач</label><input id="fTeacher" value="${l ? l.teacher : ''}" placeholder="ПІБ та посада"></div>
+    <div class="field-row">
+      <div class="field"><label>День тижня</label>
+        <select id="fDay">${days.map(d => `<option value="${d}"${l && l.day === d ? ' selected' : ''}>${d}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>Тип заняття</label>
+        <select id="fType">${Object.entries(typeLabels).map(([k, v]) => `<option value="${k}"${l && l.type === k ? ' selected' : ''}>${v}</option>`).join('')}</select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Час початку</label><input id="fTime" type="time" value="${l ? l.time : '08:00'}"></div>
+      <div class="field"><label>Тривалість</label><input id="fDur" value="${l ? l.dur : '1:30'}" placeholder="1:30"></div>
+    </div>
+    <div class="field"><label>Аудиторія</label><input id="fRoom" value="${l ? l.room : ''}" placeholder="А-201"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Скасувати</button>
+      <button class="btn-save" onclick="saveLesson('${id || ''}')">${l ? '💾 Зберегти' : '➕ Додати'}</button>
+    </div>`;
+}
+
+window.openAdd = () => {
+  document.getElementById('modal').innerHTML = formHTML(null, null);
+  document.getElementById('overlay').classList.add('open');
+};
+window.openEdit = (id) => {
+  document.getElementById('modal').innerHTML = formHTML(id, lessons[id]);
+  document.getElementById('overlay').classList.add('open');
+};
+window.saveLesson = async (id) => {
+  const s = document.getElementById('fSubject').value.trim();
+  if (!s) { alert('Введіть назву предмету'); return; }
+  const obj = {
+    subject: s,
+    teacher: document.getElementById('fTeacher').value.trim(),
+    day: document.getElementById('fDay').value,
+    type: document.getElementById('fType').value,
+    time: document.getElementById('fTime').value,
+    dur: document.getElementById('fDur').value.trim() || '1:30',
+    room: document.getElementById('fRoom').value.trim()
+  };
+  if (id) {
+    await update(ref(db, 'lessons/' + id), obj);
+    showToast('✅ Заняття оновлено', 'green');
+  } else {
+    await push(lessonsRef, obj);
+    showToast('✅ Заняття додано', 'green');
+  }
+  closeModal();
+};
+window.confirmDelete = (id) => {
+  const l = lessons[id];
+  document.getElementById('modal').innerHTML = `
+    <div class="modal-title" style="color:#791F1F"><i class="ti ti-alert-triangle"></i> Видалити заняття?</div>
+    <p style="font-size:13px;color:#666;margin-bottom:16px;line-height:1.7">
+      Ви впевнені, що хочете видалити:<br>
+      <strong style="color:#1a1a1a">${l.subject}</strong><br>
+      <span style="font-size:12px">${l.day}, ${l.time} · ${l.room}</span>
+    </p>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Скасувати</button>
+      <button class="btn-del-confirm" onclick="deleteLesson('${id}')"><i class="ti ti-trash"></i> Так, видалити</button>
+    </div>`;
+  document.getElementById('overlay').classList.add('open');
+};
+window.deleteLesson = async (id) => {
+  await remove(ref(db, 'lessons/' + id));
+  closeModal();
+  showToast('🗑 Заняття видалено', 'red');
+};
+window.closeModal = () => document.getElementById('overlay').classList.remove('open');
+document.getElementById('overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('overlay')) closeModal();
+});
+window.filterDay = (day, btn) => {
+  activeDay = day;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  render();
+};
+window.openLogin = () => {
+  document.getElementById('modal').innerHTML = `
+    <div class="modal-title"><i class="ti ti-lock"></i> Вхід адміністратора</div>
+    <p style="font-size:13px;color:#888;margin-bottom:14px;line-height:1.6">
+      Розклад відкритий для перегляду без реєстрації.<br>Для редагування увійдіть як адміністратор.
+    </p>
+    <div class="field"><label>Email</label><input type="email" id="loginEmail" placeholder="admin@example.com"></div>
+    <div class="field"><label>Пароль</label><input type="password" id="loginPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <div class="login-err" id="loginErr"><i class="ti ti-alert-circle"></i> Невірний email або пароль</div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Скасувати</button>
+      <button class="btn-save" onclick="doLogin()"><i class="ti ti-login"></i> Увійти</button>
+    </div>`;
+  document.getElementById('overlay').classList.add('open');
+  setTimeout(() => { const e = document.getElementById('loginEmail'); if (e) e.focus(); }, 100);
+};
+window.doLogin = async () => {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  try {
+    await signInWithEmailAndPassword(auth, email, pass);
+    closeModal();
+    showToast('👋 Ласкаво просимо, адміністратор!', 'green');
+  } catch {
+    document.getElementById('loginErr').style.display = 'block';
+  }
+};
+window.doLogout = async () => {
+  await signOut(auth);
+  showToast('👋 Ви вийшли з системи', 'red');
+};
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  t.className = 'toast ' + (type || 'green');
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+</script>
+</body>
+</html>
