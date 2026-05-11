@@ -158,6 +158,30 @@
     border-color: transparent;
     box-shadow: 0 4px 16px rgba(29,158,117,0.4), 0 1px 0 rgba(255,255,255,0.3) inset;
   }
+  .groups-toggle-btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border-radius: 100px;
+    border: 1px solid var(--glass-border);
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    cursor: pointer; font-size: 13px; font-weight: 600;
+    color: var(--text-secondary); transition: all 0.2s;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    white-space: nowrap;
+  }
+  .groups-toggle-btn:hover { background: rgba(255,255,255,0.35); color: var(--text-primary); }
+  .group-tabs-wrap {
+    display: flex; align-items: center; gap: 8px; flex-wrap: nowrap;
+  }
+  .group-tabs-list {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    overflow: hidden; max-height: 0;
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+    opacity: 0;
+  }
+  .group-tabs-list.open {
+    max-height: 300px; opacity: 1;
+  }
   .group-tab.more-tab {
     background: rgba(255,255,255,0.15);
     border-style: dashed;
@@ -677,54 +701,45 @@ function getGroups() {
 
 // Оновлюємо кнопки груп
 let groupsExpanded = false;
-const GROUPS_VISIBLE = 3;
 
 function renderGroupTabs() {
   const groups = getGroups();
   const tabs = document.getElementById('groupTabs');
   tabs.innerHTML = '';
 
-  const visible = groupsExpanded ? groups : groups.slice(0, GROUPS_VISIBLE);
-  const hidden = groups.slice(GROUPS_VISIBLE);
+  // Toggle button
+  const toggleBtn = document.createElement('button');
+  toggleBtn.className = 'groups-toggle-btn';
+  toggleBtn.innerHTML = groupsExpanded
+    ? '<i class="ti ti-chevron-up" style="font-size:14px"></i> Приховати групи'
+    : '<i class="ti ti-chevron-down" style="font-size:14px"></i> Показати групи';
+  toggleBtn.addEventListener('click', () => {
+    groupsExpanded = !groupsExpanded;
+    renderGroupTabs();
+  });
+  tabs.appendChild(toggleBtn);
 
-  visible.forEach(g => {
+  // Group list (collapsible)
+  const list = document.createElement('div');
+  list.className = 'group-tabs-list' + (groupsExpanded ? ' open' : '');
+
+  groups.forEach(g => {
     const btn = document.createElement('button');
     btn.className = 'group-tab' + (activeGroup === g ? ' active' : '');
     btn.textContent = g;
     btn.addEventListener('click', () => { activeGroup = g; renderGroupTabs(); render(); });
-    tabs.appendChild(btn);
+    list.appendChild(btn);
   });
-
-  // "More" toggle button if there are more than GROUPS_VISIBLE groups
-  if (groups.length > GROUPS_VISIBLE) {
-    const moreBtn = document.createElement('button');
-    if (!groupsExpanded) {
-      moreBtn.className = 'group-tab more-tab';
-      moreBtn.innerHTML = '••• ' + hidden.length + ' ще';
-      moreBtn.title = hidden.join(', ');
-    } else {
-      // Show hidden groups first, then collapse button
-      hidden.forEach(g => {
-        const btn = document.createElement('button');
-        btn.className = 'group-tab' + (activeGroup === g ? ' active' : '');
-        btn.textContent = g;
-        btn.addEventListener('click', () => { activeGroup = g; groupsExpanded = false; renderGroupTabs(); render(); });
-        tabs.appendChild(btn);
-      });
-      moreBtn.className = 'group-tab more-tab collapse-tab';
-      moreBtn.innerHTML = '▲ Згорнути';
-    }
-    moreBtn.addEventListener('click', () => { groupsExpanded = !groupsExpanded; renderGroupTabs(); });
-    tabs.appendChild(moreBtn);
-  }
 
   if (isAdmin) {
     const addBtn = document.createElement('button');
     addBtn.className = 'add-group-btn';
     addBtn.innerHTML = '<i class="ti ti-plus" style="font-size:14px"></i> Нова група';
-    addBtn.addEventListener('click', () => showAddGroupInput(tabs, addBtn));
-    tabs.appendChild(addBtn);
+    addBtn.addEventListener('click', () => showAddGroupInput(list, addBtn));
+    list.appendChild(addBtn);
   }
+
+  tabs.appendChild(list);
 }
 
 function showAddGroupInput(tabs, addBtn) {
@@ -763,7 +778,7 @@ onValue(lessonsRef, (snap) => {
   // Якщо ще не обрана група — ставимо першу доступну
   if (activeGroup === 'all') {
     const groups = getGroups();
-    if (groups.length > 0) activeGroup = groups[0];
+    if (groups.length > 0) { activeGroup = groups[0]; groupsExpanded = true; }
   }
   renderGroupTabs();
   render();
