@@ -386,6 +386,32 @@
     cursor: pointer; font-size: 12px; color: #1D6B3A; font-weight: 600; transition: all 0.15s;
   }
   .btn-dup:hover { background: rgba(180,235,195,0.7); }
+  .lesson-row.is-hidden {
+    opacity: 0.45;
+    border-style: dashed;
+    border-color: rgba(0,0,0,0.15);
+    background: rgba(255,255,255,0.1);
+  }
+  .hidden-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    padding: 3px 9px; border-radius: 100px;
+    background: rgba(120,120,140,0.15);
+    border: 1px solid rgba(120,120,140,0.3);
+    font-size: 11px; font-weight: 600; color: #666;
+  }
+  .btn-hide {
+    display: flex; align-items: center; gap: 4px;
+    padding: 6px 12px; border-radius: 10px;
+    border: 1px solid rgba(180,150,220,0.5);
+    background: rgba(240,225,255,0.5);
+    backdrop-filter: blur(8px);
+    cursor: pointer; font-size: 12px; color: #5B2D8E; font-weight: 600; transition: all 0.15s;
+  }
+  .btn-hide:hover { background: rgba(220,190,255,0.7); }
+  .btn-hide.active {
+    background: rgba(90,40,140,0.15);
+    border-color: rgba(90,40,140,0.4);
+  }
   .add-group-btn {
     display: flex; align-items: center; gap: 5px;
     padding: 7px 14px; border-radius: 100px;
@@ -731,6 +757,11 @@ function render() {
       });
     }
 
+    // Приховані заняття — лише адмін бачить
+    if (!isAdmin) {
+      entries = entries.filter(([, l]) => !l.hidden);
+    }
+
     entries.sort((a, b) => a[1].time.localeCompare(b[1].time));
 
     const cls = dayCls[day] || '';
@@ -742,7 +773,7 @@ function render() {
           const isShared = groupArr2.length === 0;
           const groupLabel = !isShared ? `<span class="group-badge-lesson"><i class="ti ti-users" style="font-size:9px"></i> ${groupArr2.join(', ')}</span>` : '';
           return `
-          <div class="lesson-row">
+          <div class="lesson-row${l.hidden ? ' is-hidden' : ''}">
             <div class="time-col">${l.time}<div class="time-dur">${l.dur} год</div></div>
             <div class="divider-line"></div>
             <div class="subject-col">
@@ -752,7 +783,9 @@ function render() {
             <span class="type-badge type-${l.type}">${typeLabels[l.type] || l.type}</span>
             <span class="room-badge"><i class="ti ti-door" style="font-size:13px"></i>${l.room}</span>
             ${l.zoom ? '<a href="' + l.zoom + '" target="_blank" class="zoom-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="6" fill="#2D8CFF"/><path d="M4 8.5C4 7.67 4.67 7 5.5 7h9C15.33 7 16 7.67 16 8.5v7c0 .83-.67 1.5-1.5 1.5h-9C4.67 17 4 16.33 4 15.5v-7zm12 2.1 3.6-2.4A.5.5 0 0 1 20 8.6v6.8a.5.5 0 0 1-.4.49l-3.6-2.4V10.6z" fill="white"/></svg> Zoom</a>' : ''}
+            ${isAdmin && l.hidden ? '<span class="hidden-badge"><i class="ti ti-eye-off" style="font-size:10px"></i> Приховано</span>' : ''}
             ${isAdmin ? `<div class="actions">
+              <button class="btn-hide ${l.hidden ? 'active' : ''}" onclick="toggleHide('${id}')" title="${l.hidden ? 'Показати' : 'Приховати'}"><i class="ti ti-eye${l.hidden ? '' : '-off'}"></i></button>
               <button class="btn-dup" onclick="duplicateLesson('${id}')"><i class="ti ti-copy"></i></button>
               <button class="btn-edit" onclick="openEdit('${id}')"><i class="ti ti-edit"></i></button>
               <button class="btn-del" onclick="confirmDelete('${id}')"><i class="ti ti-trash"></i></button>
@@ -869,6 +902,13 @@ window.saveLesson = async (id) => {
   }
   closeModal();
 };
+window.toggleHide = async (id) => {
+  const l = lessons[id];
+  if (!l) return;
+  await update(ref(db, 'lessons/' + id), { hidden: !l.hidden });
+  showToast(l.hidden ? '👁 Заняття показано' : '🙈 Заняття приховано', 'green');
+};
+
 window.confirmDelete = (id) => {
   const l = lessons[id];
   document.getElementById('modal').innerHTML = `
