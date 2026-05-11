@@ -307,6 +307,35 @@
   .type-lab  { background: rgba(250,238,218,0.7); color: #633806; border: 1px solid rgba(250,199,117,0.5); }
   .type-sem  { background: rgba(220,218,254,0.7); color: #3C3489; border: 1px solid rgba(175,169,236,0.5); }
 
+  /* Checkboxes for group selection */
+  .group-checks {
+    display: flex; flex-wrap: wrap; gap: 7px; margin-top: 4px;
+  }
+  .group-check-label {
+    display: flex; align-items: center; gap: 6px;
+    padding: 7px 13px; border-radius: 100px;
+    border: 1.5px solid rgba(0,0,0,0.1);
+    background: rgba(255,255,255,0.45);
+    cursor: pointer; font-size: 13px; font-weight: 600;
+    color: var(--text-secondary); transition: all 0.15s;
+    user-select: none;
+  }
+  .group-check-label:hover { background: rgba(255,255,255,0.65); color: var(--text-primary); }
+  .group-check-label input[type=checkbox] { display: none; }
+  .group-check-label.checked {
+    background: linear-gradient(135deg, #1D9E75, #27ae7a);
+    color: white; border-color: transparent;
+    box-shadow: 0 3px 10px rgba(29,158,117,0.35);
+  }
+  .group-check-shared {
+    background: rgba(40,50,70,0.08); color: #29323c;
+    border-color: rgba(40,50,70,0.15);
+  }
+  .group-check-shared.checked {
+    background: linear-gradient(135deg, #485563, #29323c);
+    color: white; border-color: transparent;
+    box-shadow: 0 3px 10px rgba(40,50,70,0.3);
+  }
   .zoom-badge {
     display: inline-flex; align-items: center; gap: 5px;
     font-size: 12px; font-weight: 700; color: #fff;
@@ -563,7 +592,8 @@ const lessonsRef = ref(db, 'lessons');
 function getGroups() {
   const groups = new Set();
   Object.values(lessons).forEach(l => {
-    if (l.group && l.group.trim()) groups.add(l.group.trim());
+    const g = Array.isArray(l.group) ? l.group : (l.group ? [l.group] : []);
+    g.forEach(name => { if (name && name.trim()) groups.add(name.trim()); });
   });
   return [...groups].sort();
 }
@@ -613,7 +643,10 @@ function render() {
 
     // Фільтр по групі: 'all' = без фільтру, інакше — тільки спільні (без групи) + обрана група
     if (activeGroup !== 'all') {
-      entries = entries.filter(([, l]) => !l.group || l.group.trim() === '' || l.group.trim() === activeGroup);
+      entries = entries.filter(([, l]) => {
+        const g = Array.isArray(l.group) ? l.group : (l.group ? [l.group] : []);
+        return g.length === 0 || g.includes(activeGroup);
+      });
     }
 
     entries.sort((a, b) => a[1].time.localeCompare(b[1].time));
@@ -623,8 +656,9 @@ function render() {
 
     const rows = entries.length
       ? entries.map(([id, l]) => {
-          const isShared = !l.group || l.group.trim() === '';
-          const groupLabel = !isShared ? `<span class="group-badge-lesson"><i class="ti ti-users" style="font-size:9px"></i> ${l.group}</span>` : '';
+          const groupArr2 = Array.isArray(l.group) ? l.group : (l.group ? [l.group] : []);
+          const isShared = groupArr2.length === 0;
+          const groupLabel = !isShared ? `<span class="group-badge-lesson"><i class="ti ti-users" style="font-size:9px"></i> ${groupArr2.join(', ')}</span>` : '';
           return `
           <div class="lesson-row">
             <div class="time-col">${l.time}<div class="time-dur">${l.dur} год</div></div>
@@ -656,8 +690,8 @@ function render() {
 
 function formHTML(id, l) {
   const groups = getGroups();
-  const datalistOpts = groups.map(g => `<option value="${g}">`).join('');
-  const groupVal = l ? (l.group || '') : '';
+  // group can be array or single string (legacy)
+  const groupArr = l ? (Array.isArray(l.group) ? l.group : (l.group ? [l.group] : [])) : [];
   return `
     <div class="modal-title"><i class="ti ti-${l ? 'edit' : 'plus'}"></i> ${l ? 'Редагувати заняття' : 'Нове заняття'}</div>
     <div class="field"><label>Предмет</label><input id="fSubject" value="${l ? l.subject : ''}" placeholder="Назва предмету"></div>
@@ -676,10 +710,19 @@ function formHTML(id, l) {
     </div>
     <div class="field-row">
       <div class="field"><label>Аудиторія</label><input id="fRoom" value="${l ? l.room : ''}" placeholder="А-201"></div>
-      <div class="field">
-        <label>Група <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;opacity:.7">(порожньо = спільне)</span></label>
-        <input id="fGroup" list="fGroupList" value="${groupVal}" placeholder="ПЗ-31 або порожньо">
-        <datalist id="fGroupList">${datalistOpts}</datalist>
+      <div class="field" style="flex:2">
+        <label>Групи <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;opacity:.7">(нічого = спільне)</span></label>
+        <div class="group-checks" id="fGroupChecks">
+          <label class="group-check-label group-check-shared" id="fCheckShared">
+            <input type="checkbox" value=""> 📅 Спільне
+          </label>
+          ${groups.map(g => {
+            const checked = groupArr.includes(g);
+            return \`<label class="group-check-label\${checked ? ' checked' : ''}" onclick="toggleCheck(this)">
+              <input type="checkbox" value="\${g}"\${checked ? ' checked' : ''}> \${g}
+            </label>\`;
+          }).join('')}
+        </div>
       </div>
     </div>
     <div class="field"><label>Посилання Zoom <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;opacity:.7">(необов'язково)</span></label>
@@ -693,15 +736,34 @@ function formHTML(id, l) {
 window.openAdd = () => {
   document.getElementById('modal').innerHTML = formHTML(null, null);
   document.getElementById('overlay').classList.add('open');
+  initGroupChecks();
 };
 window.openEdit = (id) => {
   document.getElementById('modal').innerHTML = formHTML(id, lessons[id]);
   document.getElementById('overlay').classList.add('open');
+  initGroupChecks();
 };
+
+// Ініціалізація чекбоксів після рендеру форми
+function initGroupChecks() {
+  const container = document.getElementById('fGroupChecks');
+  if (!container) return;
+  container.querySelectorAll('.group-check-label').forEach(label => {
+    const cb = label.querySelector('input[type=checkbox]');
+    if (cb && cb.checked) label.classList.add('checked');
+    label.addEventListener('click', (e) => {
+      e.preventDefault();
+      cb.checked = !cb.checked;
+      label.classList.toggle('checked', cb.checked);
+    });
+  });
+}
 window.saveLesson = async (id) => {
   const s = document.getElementById('fSubject').value.trim();
   if (!s) { alert('Введіть назву предмету'); return; }
-  const group = (document.getElementById('fGroup').value || '').trim();
+  const checkboxes = document.querySelectorAll('#fGroupChecks input[type=checkbox]');
+  const group = [...checkboxes].filter(c => c.checked && c.value).map(c => c.value);
+  // [] means shared (all groups)
   const obj = {
     subject: s,
     teacher: document.getElementById('fTeacher').value.trim(),
@@ -729,7 +791,7 @@ window.confirmDelete = (id) => {
     <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;line-height:1.7">
       Ви впевнені, що хочете видалити:<br>
       <strong style="color:var(--text-primary)">${l.subject}</strong><br>
-      <span style="font-size:12px">${l.day}, ${l.time} · ${l.room}${l.group ? ' · ' + l.group : ''}</span>
+      <span style="font-size:12px">${l.day}, ${l.time} · ${l.room}${l.group && l.group.length ? ' · ' + (Array.isArray(l.group) ? l.group.join(', ') : l.group) : ''}</span>
     </p>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal()">Скасувати</button>
