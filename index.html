@@ -440,6 +440,36 @@
     cursor: pointer; font-size: 12px; color: #5B2D8E; font-weight: 600; transition: all 0.15s;
   }
   .btn-hide:hover { background: rgba(220,190,255,0.7); }
+  .btn-archive {
+    display: flex; align-items: center; gap: 4px;
+    padding: 6px 12px; border-radius: 10px;
+    border: 1px solid rgba(200,160,80,0.45);
+    background: rgba(255,243,200,0.5);
+    backdrop-filter: blur(8px);
+    cursor: pointer; font-size: 12px; color: #7A5000; font-weight: 600; transition: all 0.15s;
+  }
+  .btn-archive:hover { background: rgba(255,225,120,0.7); }
+
+  /* Archive modal */
+  .archive-list { display: flex; flex-direction: column; gap: 10px; max-height: 420px; overflow-y: auto; margin-bottom: 16px; }
+  .archive-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 14px; border-radius: var(--radius-sm);
+    background: rgba(255,255,255,0.35);
+    border: 1px solid rgba(255,255,255,0.5);
+  }
+  .archive-item-info { flex: 1; min-width: 0; }
+  .archive-item-name { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+  .archive-item-meta { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+  .btn-restore {
+    display: flex; align-items: center; gap: 5px;
+    padding: 7px 14px; border-radius: 100px;
+    border: none; background: linear-gradient(135deg, #1D9E75, #27ae7a);
+    color: white; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap;
+    box-shadow: 0 3px 10px rgba(29,158,117,0.3);
+  }
+  .btn-restore:hover { transform: translateY(-1px); }
+  .archive-empty { text-align: center; padding: 30px; color: var(--text-tertiary); font-size: 13px; }
   .btn-hide.active {
     background: rgba(90,40,140,0.15);
     border-color: rgba(90,40,140,0.4);
@@ -620,6 +650,7 @@
   </div>
   <div class="header-actions">
     <button class="glass-btn login-btn" id="loginBtn" onclick="openLogin()"><i class="ti ti-lock"></i> Вхід</button>
+    <button class="glass-btn" id="archiveBtn" onclick="openArchive()" style="display:none"><i class="ti ti-archive"></i> Архів</button>
     <button class="glass-btn logout glass-btn logout-btn" id="logoutBtn" onclick="doLogout()"><i class="ti ti-logout"></i> Вийти</button>
   </div>
 </div>
@@ -794,6 +825,7 @@ onAuthStateChanged(auth, (user) => {
   document.getElementById('loginBtn').style.display = isAdmin ? 'none' : 'flex';
   document.getElementById('logoutBtn').style.display = isAdmin ? 'flex' : 'none';
   document.getElementById('addBtn').style.display = isAdmin ? 'flex' : 'none';
+  document.getElementById('archiveBtn').style.display = isAdmin ? 'flex' : 'none';
   document.getElementById('infoBar').style.display = isAdmin ? 'none' : 'flex';
   render();
 });
@@ -813,7 +845,10 @@ function render() {
       });
     }
 
-    // Приховані заняття — лише адмін бачить
+    // Архівовані — не показувати нікому в розкладі
+    entries = entries.filter(([, l]) => !l.archived);
+
+    // Приховані — лише адмін бачить
     if (!isAdmin) {
       entries = entries.filter(([, l]) => !l.hidden);
     }
@@ -842,6 +877,7 @@ function render() {
             ${isAdmin && l.hidden ? '<span class="hidden-badge"><i class="ti ti-eye-off" style="font-size:10px"></i> Приховано</span>' : ''}
             ${isAdmin ? `<div class="actions">
               <button class="btn-hide ${l.hidden ? 'active' : ''}" onclick="toggleHide('${id}')" title="${l.hidden ? 'Показати' : 'Приховати'}"><i class="ti ti-eye${l.hidden ? '' : '-off'}"></i></button>
+              <button class="btn-archive" onclick="archiveLesson('${id}')" title="В архів"><i class="ti ti-archive"></i></button>
               <button class="btn-dup" onclick="duplicateLesson('${id}')"><i class="ti ti-copy"></i></button>
               <button class="btn-edit" onclick="openEdit('${id}')"><i class="ti ti-edit"></i></button>
               <button class="btn-del" onclick="confirmDelete('${id}')"><i class="ti ti-trash"></i></button>
@@ -963,6 +999,41 @@ window.toggleHide = async (id) => {
   if (!l) return;
   await update(ref(db, 'lessons/' + id), { hidden: !l.hidden });
   showToast(l.hidden ? '👁 Заняття показано' : '🙈 Заняття приховано', 'green');
+};
+
+window.archiveLesson = async (id) => {
+  const l = lessons[id];
+  if (!l) return;
+  await update(ref(db, 'lessons/' + id), { archived: true });
+  showToast('📦 Заняття в архіві', 'green');
+};
+
+window.restoreLesson = async (id) => {
+  await update(ref(db, 'lessons/' + id), { archived: false });
+  showToast('✅ Заняття відновлено', 'green');
+  openArchive(); // refresh archive modal
+};
+
+window.openArchive = () => {
+  const archived = Object.entries(lessons).filter(([, l]) => l.archived);
+  const listHTML = archived.length
+    ? archived.map(([id, l]) => `
+        <div class="archive-item">
+          <div class="archive-item-info">
+            <div class="archive-item-name">${l.subject}</div>
+            <div class="archive-item-meta">${l.day} · ${l.time} · ${l.room}${l.group && l.group.length ? ' · ' + (Array.isArray(l.group) ? l.group.join(', ') : l.group) : ''}</div>
+          </div>
+          <button class="btn-restore" onclick="restoreLesson('${id}')"><i class="ti ti-refresh"></i> Відновити</button>
+        </div>`).join('')
+    : '<div class="archive-empty"><i class="ti ti-archive" style="font-size:32px;display:block;margin-bottom:8px;opacity:.3"></i>Архів порожній</div>';
+
+  document.getElementById('modal').innerHTML = `
+    <div class="modal-title"><i class="ti ti-archive"></i> Архів занять</div>
+    <div class="archive-list">${listHTML}</div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Закрити</button>
+    </div>`;
+  document.getElementById('overlay').classList.add('open');
 };
 
 window.confirmDelete = (id) => {
