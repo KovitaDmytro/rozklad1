@@ -450,6 +450,46 @@
   }
   .btn-archive:hover { background: rgba(255,225,120,0.7); }
 
+  /* Catalog modal */
+  .catalog-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+  .catalog-tab {
+    flex: 1; padding: 8px; border-radius: var(--radius-sm);
+    border: 1px solid var(--glass-border);
+    background: var(--glass-bg); cursor: pointer;
+    font-size: 13px; font-weight: 600; color: var(--text-secondary);
+    transition: all 0.15s;
+  }
+  .catalog-tab.active { background: var(--accent); color: white; border-color: var(--accent); }
+  .catalog-list { display: flex; flex-direction: column; gap: 8px; max-height: 340px; overflow-y: auto; margin-bottom: 14px; }
+  .catalog-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border-radius: var(--radius-sm);
+    background: rgba(255,255,255,0.35); border: 1px solid rgba(255,255,255,0.5);
+  }
+  .catalog-item-info { flex: 1; min-width: 0; }
+  .catalog-item-name { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+  .catalog-item-sub { font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
+  .btn-cat-del {
+    padding: 5px 10px; border-radius: 8px; border: 1px solid rgba(220,80,80,0.3);
+    background: rgba(255,230,230,0.5); color: #891; cursor: pointer; font-size: 12px;
+    color: #922; transition: all 0.15s;
+  }
+  .btn-cat-del:hover { background: rgba(255,180,180,0.7); }
+  .catalog-add-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .catalog-add-row input {
+    flex: 1; min-width: 120px; padding: 8px 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--glass-border); background: rgba(255,255,255,0.55);
+    font-size: 13px; color: var(--text-primary); outline: none;
+  }
+  .catalog-add-row input:focus { border-color: var(--accent); }
+  .btn-cat-add {
+    padding: 8px 16px; border-radius: var(--radius-sm); border: none;
+    background: linear-gradient(135deg, #1D9E75, #27ae7a);
+    color: white; font-size: 13px; font-weight: 700; cursor: pointer;
+    box-shadow: 0 3px 10px rgba(29,158,117,0.3); white-space: nowrap;
+  }
+  .field select, .field input[list] { width: 100%; }
+
   /* Archive modal */
   .archive-list { display: flex; flex-direction: column; gap: 10px; max-height: 420px; overflow-y: auto; margin-bottom: 16px; }
   .archive-item {
@@ -650,6 +690,7 @@
   </div>
   <div class="header-actions">
     <button class="glass-btn login-btn" id="loginBtn" onclick="openLogin()"><i class="ti ti-lock"></i> Вхід</button>
+    <button class="glass-btn" id="catalogBtn" onclick="openCatalog()" style="display:none"><i class="ti ti-books"></i> Каталог</button>
     <button class="glass-btn" id="archiveBtn" onclick="openArchive()" style="display:none"><i class="ti ti-archive"></i> Архів</button>
     <button class="glass-btn logout glass-btn logout-btn" id="logoutBtn" onclick="doLogout()"><i class="ti ti-logout"></i> Вийти</button>
   </div>
@@ -713,11 +754,15 @@ let activeDay = 'all';
 let activeGroup = 'all'; // 'all' = спільний, або назва групи
 let lessons = {};
 let extraGroups = {};
+let catalogSubjects = {};   // { id: { name, code } }
+let catalogTeachers = {};   // { id: { name, title } }
 
 const days = ['Понеділок','Вівторок','Середа','Четвер','Пятниця','Субота'];
 const dayCls = {Понеділок:'day-mon',Вівторок:'day-tue',Середа:'day-wed',Четвер:'day-thu',Пятниця:'day-fri',Субота:'day-sat'};
 const typeLabels = {lec:'Лекція',prac:'Практика',lab:'Лабораторна',sem:'Семінар'};
 const lessonsRef = ref(db, 'lessons');
+const subjectsRef = ref(db, 'catalog/subjects');
+const teachersRef = ref(db, 'catalog/teachers');
 
 // Отримуємо унікальні групи з уроків
 function getGroups() {
@@ -803,6 +848,9 @@ window.confirmAddGroup = async () => {
   renderGroupTabs();
 };
 
+onValue(subjectsRef, (snap) => { catalogSubjects = snap.val() || {}; });
+onValue(teachersRef, (snap) => { catalogTeachers = snap.val() || {}; });
+
 onValue(ref(db, 'groups'), (snap) => {
   extraGroups = snap.val() || {};
   renderGroupTabs();
@@ -825,6 +873,7 @@ onAuthStateChanged(auth, (user) => {
   document.getElementById('loginBtn').style.display = isAdmin ? 'none' : 'flex';
   document.getElementById('logoutBtn').style.display = isAdmin ? 'flex' : 'none';
   document.getElementById('addBtn').style.display = isAdmin ? 'flex' : 'none';
+  document.getElementById('catalogBtn').style.display = isAdmin ? 'flex' : 'none';
   document.getElementById('archiveBtn').style.display = isAdmin ? 'flex' : 'none';
   document.getElementById('infoBar').style.display = isAdmin ? 'none' : 'flex';
   render();
@@ -910,15 +959,21 @@ function formHTML(id, l) {
   }).join('');
 
   return '<div class="modal-title"><i class="ti ti-' + (l ? 'edit' : 'plus') + '"></i> ' + (l ? 'Редагувати заняття' : 'Нове заняття') + '</div>' +
-    '<div class="field"><label>Предмет</label><input id="fSubject" value="' + (l ? l.subject : '') + '" placeholder="Назва предмету"></div>' +
-    '<div class="field"><label>Викладач</label><input id="fTeacher" value="' + (l ? l.teacher : '') + '" placeholder="ПІБ та посада"></div>' +
+    '<div class="field"><label>Предмет</label>' +
+      '<input id="fSubject" list="subjectList" value="' + (l ? l.subject : '') + '" placeholder="Оберіть або введіть предмет" autocomplete="off">' +
+      '<datalist id="subjectList">' + Object.values(catalogSubjects).map(s => '<option value="' + s.name + '">').join('') + '</datalist>' +
+    '</div>' +
+    '<div class="field"><label>Викладач</label>' +
+      '<input id="fTeacher" list="teacherList" value="' + (l ? l.teacher : '') + '" placeholder="Оберіть або введіть викладача" autocomplete="off">' +
+      '<datalist id="teacherList">' + Object.values(catalogTeachers).map(t => '<option value="' + t.name + '">').join('') + '</datalist>' +
+    '</div>' +
     '<div class="field-row">' +
       '<div class="field"><label>День тижня</label><select id="fDay">' + dayOpts + '</select></div>' +
       '<div class="field"><label>Тип заняття</label><select id="fType">' + typeOpts + '</select></div>' +
     '</div>' +
     '<div class="field-row">' +
       '<div class="field"><label>Час початку</label><input id="fTime" type="time" value="' + (l ? l.time : '08:00') + '"></div>' +
-      '<div class="field"><label>Тривалість</label><input id="fDur" value="' + (l ? l.dur : '1:30') + '" placeholder="1:30"></div>' +
+      '<div class="field"><label>Тривалість</label><input id="fDur" value="' + (l ? l.dur : '1:20') + '" placeholder="1:20"></div>' +
     '</div>' +
     '<div class="field-row">' +
       '<div class="field"><label>Аудиторія</label><input id="fRoom" value="' + (l ? l.room : '') + '" placeholder="А-201"></div>' +
@@ -980,7 +1035,7 @@ window.saveLesson = async (id) => {
     day: document.getElementById('fDay').value,
     type: document.getElementById('fType').value,
     time: document.getElementById('fTime').value,
-    dur: document.getElementById('fDur').value.trim() || '1:30',
+    dur: document.getElementById('fDur').value.trim() || '1:20',
     room: document.getElementById('fRoom').value.trim(),
     group: group,
     zoom: document.getElementById('fZoom').value.trim()
@@ -1012,6 +1067,73 @@ window.restoreLesson = async (id) => {
   await update(ref(db, 'lessons/' + id), { archived: false });
   showToast('✅ Заняття відновлено', 'green');
   openArchive(); // refresh archive modal
+};
+
+let catalogActiveTab = 'subjects'; // 'subjects' | 'teachers'
+
+window.openCatalog = () => { renderCatalogModal(); };
+
+function renderCatalogModal() {
+  const isSubjects = catalogActiveTab === 'subjects';
+  const items = isSubjects ? catalogSubjects : catalogTeachers;
+
+  const listHTML = Object.entries(items).length
+    ? Object.entries(items).map(([id, item]) => `
+        <div class="catalog-item">
+          <div class="catalog-item-info">
+            <div class="catalog-item-name">${item.name}</div>
+            ${item.code ? '<div class="catalog-item-sub">' + item.code + '</div>' : ''}
+            ${item.title ? '<div class="catalog-item-sub">' + item.title + '</div>' : ''}
+          </div>
+          <button class="btn-cat-del" onclick="deleteCatalogItem('${id}')"><i class="ti ti-trash"></i></button>
+        </div>`).join('')
+    : '<div class="archive-empty"><i class="ti ti-database" style="font-size:28px;display:block;margin-bottom:8px;opacity:.3"></i>Список порожній</div>';
+
+  const addRow = isSubjects
+    ? `<div class="catalog-add-row">
+        <input id="catName" placeholder="Назва предмету" />
+        <input id="catCode" placeholder="Код (необов'язково)" style="max-width:130px" />
+        <button class="btn-cat-add" onclick="addCatalogItem()"><i class="ti ti-plus"></i> Додати</button>
+      </div>`
+    : `<div class="catalog-add-row">
+        <input id="catName" placeholder="ПІБ викладача" />
+        <input id="catCode" placeholder="Посада (необов'язково)" style="max-width:150px" />
+        <button class="btn-cat-add" onclick="addCatalogItem()"><i class="ti ti-plus"></i> Додати</button>
+      </div>`;
+
+  document.getElementById('modal').innerHTML = `
+    <div class="modal-title"><i class="ti ti-books"></i> Каталог</div>
+    <div class="catalog-tabs">
+      <button class="catalog-tab ${isSubjects ? 'active' : ''}" onclick="switchCatalogTab('subjects')"><i class="ti ti-book"></i> Предмети</button>
+      <button class="catalog-tab ${!isSubjects ? 'active' : ''}" onclick="switchCatalogTab('teachers')"><i class="ti ti-user"></i> Викладачі</button>
+    </div>
+    <div class="catalog-list">${listHTML}</div>
+    ${addRow}
+    <div class="modal-actions" style="margin-top:12px">
+      <button class="btn-cancel" onclick="closeModal()">Закрити</button>
+    </div>`;
+  document.getElementById('overlay').classList.add('open');
+}
+
+window.switchCatalogTab = (tab) => { catalogActiveTab = tab; renderCatalogModal(); };
+
+window.addCatalogItem = async () => {
+  const name = document.getElementById('catName').value.trim();
+  const code = (document.getElementById('catCode').value || '').trim();
+  if (!name) { document.getElementById('catName').focus(); return; }
+  const isSubjects = catalogActiveTab === 'subjects';
+  const fbRef = isSubjects ? subjectsRef : teachersRef;
+  const item = isSubjects ? { name, code } : { name, title: code };
+  await push(fbRef, item);
+  showToast('✅ Додано', 'green');
+  renderCatalogModal();
+};
+
+window.deleteCatalogItem = async (id) => {
+  const isSubjects = catalogActiveTab === 'subjects';
+  await remove(ref(db, (isSubjects ? 'catalog/subjects/' : 'catalog/teachers/') + id));
+  showToast('🗑 Видалено', 'red');
+  renderCatalogModal();
 };
 
 window.openArchive = () => {
