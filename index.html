@@ -490,10 +490,7 @@
       <i class="ti ti-users" style="font-size:14px"></i> Оберіть групу або перегляньте спільний розклад
     </div>
     <div class="group-tabs" id="groupTabs">
-      <button class="group-tab all-tab active" onclick="selectGroup('all',this)">
-        <i class="ti ti-calendar" style="margin-right:5px"></i>Весь розклад
-      </button>
-      <!-- Групи підтягуються динамічно -->
+      <!-- Рендериться динамічно через JS -->
     </div>
   </div>
 
@@ -562,29 +559,23 @@ function getGroups() {
 function renderGroupTabs() {
   const groups = getGroups();
   const tabs = document.getElementById('groupTabs');
-  // Залишаємо лише першу кнопку "Весь розклад"
-  const allBtn = tabs.querySelector('.all-tab');
   tabs.innerHTML = '';
+
+  // Кнопка "Весь розклад"
+  const allBtn = document.createElement('button');
+  allBtn.className = 'group-tab all-tab' + (activeGroup === 'all' ? ' active' : '');
+  allBtn.textContent = '📅 Весь розклад';
+  allBtn.addEventListener('click', () => { activeGroup = 'all'; renderGroupTabs(); render(); });
   tabs.appendChild(allBtn);
 
   groups.forEach(g => {
     const btn = document.createElement('button');
     btn.className = 'group-tab' + (activeGroup === g ? ' active' : '');
     btn.textContent = g;
-    btn.onclick = () => selectGroup(g, btn);
+    btn.addEventListener('click', () => { activeGroup = g; renderGroupTabs(); render(); });
     tabs.appendChild(btn);
   });
-
-  // Виправляємо стан allBtn
-  allBtn.className = 'group-tab all-tab' + (activeGroup === 'all' ? ' active' : '');
 }
-
-window.selectGroup = (group, btn) => {
-  activeGroup = group;
-  document.querySelectorAll('.group-tab').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  render();
-};
 
 onValue(lessonsRef, (snap) => {
   lessons = snap.val() || {};
@@ -653,7 +644,8 @@ function render() {
 
 function formHTML(id, l) {
   const groups = getGroups();
-  const groupOptions = ['', ...groups].map(g => `<option value="${g}"${l && l.group === g ? ' selected' : ''}>${g || '— Спільне (для всіх груп) —'}</option>`).join('');
+  const datalistOpts = groups.map(g => `<option value="${g}">`).join('');
+  const groupVal = l ? (l.group || '') : '';
   return `
     <div class="modal-title"><i class="ti ti-${l ? 'edit' : 'plus'}"></i> ${l ? 'Редагувати заняття' : 'Нове заняття'}</div>
     <div class="field"><label>Предмет</label><input id="fSubject" value="${l ? l.subject : ''}" placeholder="Назва предмету"></div>
@@ -672,13 +664,11 @@ function formHTML(id, l) {
     </div>
     <div class="field-row">
       <div class="field"><label>Аудиторія</label><input id="fRoom" value="${l ? l.room : ''}" placeholder="А-201"></div>
-      <div class="field"><label>Група</label>
-        <select id="fGroup">${groupOptions}</select>
+      <div class="field">
+        <label>Група <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;opacity:.7">(порожньо = спільне)</span></label>
+        <input id="fGroup" list="fGroupList" value="${groupVal}" placeholder="ПЗ-31 або порожньо">
+        <datalist id="fGroupList">${datalistOpts}</datalist>
       </div>
-    </div>
-    <div class="field" style="margin-top:2px">
-      <label>Або введіть нову групу</label>
-      <input id="fGroupNew" placeholder="Напр: ПЗ-31, ЕК-21..." value="">
     </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal()">Скасувати</button>
@@ -697,9 +687,7 @@ window.openEdit = (id) => {
 window.saveLesson = async (id) => {
   const s = document.getElementById('fSubject').value.trim();
   if (!s) { alert('Введіть назву предмету'); return; }
-  const newGroup = document.getElementById('fGroupNew').value.trim();
-  const selGroup = document.getElementById('fGroup').value;
-  const group = newGroup || selGroup || '';
+  const group = (document.getElementById('fGroup').value || '').trim();
   const obj = {
     subject: s,
     teacher: document.getElementById('fTeacher').value.trim(),
