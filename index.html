@@ -722,7 +722,7 @@ function formHTML(id, l) {
       '<input id="fZoom" value="' + (l ? (l.zoom || '') : '') + '" placeholder="https://zoom.us/j/..."></div>' +
     '<div class="modal-actions">' +
       '<button class="btn-cancel" onclick="closeModal()">Скасувати</button>' +
-      '<button class="btn-save" onclick="saveLesson('' + (id || '') + '')">' + (l ? '💾 Зберегти' : '➕ Додати') + '</button>' +
+      '<button class="btn-save" onclick="saveLesson(&apos;' + (id || '') + '&apos;)">' + (l ? '💾 Зберегти' : '➕ Додати') + '</button>' +
     '</div>';
 }
 
