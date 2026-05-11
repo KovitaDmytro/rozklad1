@@ -707,21 +707,25 @@ function renderGroupTabs() {
   const tabs = document.getElementById('groupTabs');
   tabs.innerHTML = '';
 
-  // Toggle button
-  const toggleBtn = document.createElement('button');
-  toggleBtn.className = 'groups-toggle-btn';
-  toggleBtn.innerHTML = groupsExpanded
-    ? '<i class="ti ti-chevron-up" style="font-size:14px"></i> Приховати групи'
-    : '<i class="ti ti-chevron-down" style="font-size:14px"></i> Показати групи';
-  toggleBtn.addEventListener('click', () => {
-    groupsExpanded = !groupsExpanded;
-    renderGroupTabs();
-  });
-  tabs.appendChild(toggleBtn);
+  const isMobile = window.innerWidth <= 600;
 
-  // Group list (collapsible)
+  // Toggle button — тільки на мобільному
+  if (isMobile) {
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'groups-toggle-btn';
+    toggleBtn.innerHTML = groupsExpanded
+      ? '<i class="ti ti-chevron-up" style="font-size:14px"></i> Приховати групи'
+      : '<i class="ti ti-chevron-down" style="font-size:14px"></i> Показати групи';
+    toggleBtn.addEventListener('click', () => {
+      groupsExpanded = !groupsExpanded;
+      renderGroupTabs();
+    });
+    tabs.appendChild(toggleBtn);
+  }
+
+  // Group list — на десктопі завжди відкрито
   const list = document.createElement('div');
-  list.className = 'group-tabs-list' + (groupsExpanded ? ' open' : '');
+  list.className = 'group-tabs-list' + (!isMobile || groupsExpanded ? ' open' : '');
 
   groups.forEach(g => {
     const btn = document.createElement('button');
