@@ -418,7 +418,65 @@
     cursor: pointer; font-size: 12px; color: #1D6B3A; font-weight: 600; transition: all 0.15s;
   }
   .btn-dup:hover { background: rgba(180,235,195,0.7); }
-  /* ── CURRENT LESSON HIGHLIGHT ── */
+  .export-btn {
+    color: #085041;
+    border-color: rgba(29,158,117,0.4);
+    background: rgba(29,158,117,0.1);
+  }
+  .export-btn:hover { background: rgba(29,158,117,0.18) !important; }
+
+  /* ── EXPORT MODAL ── */
+  .export-options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+  .export-option {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 16px; border-radius: var(--radius-md);
+    border: 1.5px solid rgba(255,255,255,0.5);
+    background: rgba(255,255,255,0.3);
+    cursor: pointer; transition: all 0.18s;
+    user-select: none;
+  }
+  .export-option:hover { background: rgba(255,255,255,0.5); border-color: rgba(29,158,117,0.4); transform: translateY(-1px); }
+  .export-option.selected { background: rgba(29,158,117,0.12); border-color: rgba(29,158,117,0.55); }
+  .export-option-icon {
+    width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  .export-option-icon.pdf { background: linear-gradient(135deg, #ff6b6b, #c0392b); color: white; }
+  .export-option-icon.img { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+  .export-option-text { flex: 1; }
+  .export-option-title { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+  .export-option-desc { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+  .export-scope { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
+  .export-scope-btn {
+    padding: 7px 14px; border-radius: 100px;
+    border: 1.5px solid rgba(0,0,0,0.1);
+    background: rgba(255,255,255,0.35);
+    cursor: pointer; font-size: 12px; font-weight: 600;
+    color: var(--text-secondary); transition: all 0.15s;
+  }
+  .export-scope-btn.active { background: rgba(29,158,117,0.15); border-color: rgba(29,158,117,0.5); color: #085041; }
+  .export-progress {
+    display: none; text-align: center; padding: 16px;
+    font-size: 13px; color: var(--text-secondary); font-weight: 500;
+  }
+  .export-progress.show { display: block; }
+  .export-spinner {
+    display: inline-block; width: 18px; height: 18px;
+    border: 2.5px solid rgba(29,158,117,0.2);
+    border-top-color: #1D9E75;
+    border-radius: 50%; animation: spin 0.7s linear infinite;
+    vertical-align: middle; margin-right: 7px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Export print area */
+  #exportCanvas {
+    position: fixed; left: -9999px; top: 0;
+    width: 900px; background: #f0faf6;
+    font-family: -apple-system, 'SF Pro Display', BlinkMacSystemFont, sans-serif;
+    padding: 32px; z-index: -1;
+  }
   .lesson-row.is-current {
     background: rgba(29,158,117,0.18) !important;
     border-color: rgba(29,158,117,0.55) !important;
@@ -765,13 +823,20 @@
       <button class="filter-btn" onclick="filterDay('Пятниця',this)">Пт</button>
       <button class="filter-btn sat" onclick="filterDay('Субота',this)">Сб</button>
     </div>
-    <button class="add-btn" id="addBtn" onclick="openAdd()"><i class="ti ti-plus"></i> Додати заняття</button>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="glass-btn export-btn" id="exportBtn" onclick="openExport()"><i class="ti ti-download"></i> Експорт</button>
+      <button class="add-btn" id="addBtn" onclick="openAdd()"><i class="ti ti-plus"></i> Додати заняття</button>
+    </div>
   </div>
   <div class="days-grid" id="daysGrid">
     <div class="loading"><i class="ti ti-loader"></i> Завантаження...</div>
   </div>
 </div>
 
+<div id="exportCanvas"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
 <div class="toast" id="toast"><span id="toastMsg"></span></div>
 
@@ -1311,6 +1376,188 @@ window.doLogin = async () => {
 window.doLogout = async () => {
   await signOut(auth);
   showToast('👋 Ви вийшли з системи', 'red');
+};
+
+// ── EXPORT ──────────────────────────────────────────
+let exportFormat = 'pdf';
+let exportScope = 'all';
+
+window.openExport = () => {
+  const groups = getGroups();
+  const scopeBtns = [
+    `<button class="export-scope-btn ${exportScope==='all'?'active':''}" onclick="setExportScope('all',this)">Всі дні</button>`,
+    ...['Понеділок','Вівторок','Середа','Четвер','Пятниця','Субота'].map(d =>
+      `<button class="export-scope-btn ${exportScope===d?'active':''}" onclick="setExportScope('${d}',this)">${d.slice(0,2)}</button>`
+    )
+  ].join('');
+
+  document.getElementById('modal').innerHTML = `
+    <div class="modal-title"><i class="ti ti-download"></i> Експорт розкладу</div>
+    <div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Формат</div>
+    <div class="export-options">
+      <div class="export-option ${exportFormat==='pdf'?'selected':''}" onclick="setExportFormat('pdf',this)">
+        <div class="export-option-icon pdf"><i class="ti ti-file-type-pdf"></i></div>
+        <div class="export-option-text">
+          <div class="export-option-title">PDF документ</div>
+          <div class="export-option-desc">Зручно роздрукувати або відправити у Viber/Telegram</div>
+        </div>
+        ${exportFormat==='pdf'?'<i class="ti ti-check" style="color:#1D9E75;font-size:18px"></i>':''}
+      </div>
+      <div class="export-option ${exportFormat==='png'?'selected':''}" onclick="setExportFormat('png',this)">
+        <div class="export-option-icon img"><i class="ti ti-photo"></i></div>
+        <div class="export-option-text">
+          <div class="export-option-title">Картинка PNG</div>
+          <div class="export-option-desc">Надіслати в соцмережі або зберегти на телефон</div>
+        </div>
+        ${exportFormat==='png'?'<i class="ti ti-check" style="color:#1D9E75;font-size:18px"></i>':''}
+      </div>
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Дні</div>
+    <div class="export-scope" style="margin-bottom:16px">${scopeBtns}</div>
+    <div class="export-progress" id="exportProgress"><span class="export-spinner"></span> Генерується...</div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Скасувати</button>
+      <button class="btn-save" onclick="doExport()"><i class="ti ti-download"></i> Завантажити</button>
+    </div>`;
+  document.getElementById('overlay').classList.add('open');
+};
+
+window.setExportFormat = (fmt, el) => {
+  exportFormat = fmt;
+  document.querySelectorAll('.export-option').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  // update checkmark
+  document.querySelectorAll('.export-option').forEach(o => {
+    const last = o.querySelector('.ti-check');
+    if (last) last.remove();
+    if (o === el) o.insertAdjacentHTML('beforeend','<i class="ti ti-check" style="color:#1D9E75;font-size:18px"></i>');
+  });
+};
+
+window.setExportScope = (scope, el) => {
+  exportScope = scope;
+  document.querySelectorAll('.export-scope-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+};
+
+window.doExport = async () => {
+  const progress = document.getElementById('exportProgress');
+  progress.classList.add('show');
+  document.querySelector('.modal .btn-save').disabled = true;
+
+  // Build export HTML
+  const groupLabel = activeGroup !== 'all' ? activeGroup : 'Всі групи';
+  const filteredDays = exportScope === 'all' ? days : days.filter(d => d === exportScope);
+
+  const typeColors = {lec:'#0C447C',prac:'#085041',lab:'#633806',sem:'#3C3489'};
+  const typeBg = {lec:'#d6e7fb',prac:'#d1f5e6',lab:'#faeeda',sem:'#dcdafe'};
+  const typeLabelsLocal = {lec:'Лекція',prac:'Практика',lab:'Лабораторна',sem:'Семінар'};
+
+  const dayHeaderColors = {
+    Понеділок:'#d1f5e6',Вівторок:'#dcdafe',Середа:'#faeeda',
+    Четвер:'#d6e7fb',Пятниця:'#fbeaf0',Субота:'#b5d4f4'
+  };
+  const dayTextColors = {
+    Понеділок:'#0a5c43',Вівторок:'#3C3489',Середа:'#633806',
+    Четвер:'#0C447C',Пятниця:'#72243E',Субота:'#042C53'
+  };
+
+  let html = `
+    <div style="margin-bottom:24px;display:flex;align-items:center;gap:12px">
+      <div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#0F6E56);display:flex;align-items:center;justify-content:center;color:white;font-size:20px">📅</div>
+      <div>
+        <div style="font-size:20px;font-weight:800;color:#0a0a0f;letter-spacing:-0.5px">Розклад занять</div>
+        <div style="font-size:13px;color:#666;margin-top:2px">Група: <strong>${groupLabel}</strong> · ${new Date().toLocaleDateString('uk-UA',{day:'numeric',month:'long',year:'numeric'})}</div>
+      </div>
+    </div>`;
+
+  filteredDays.forEach(day => {
+    let entries = Object.entries(lessons).filter(([,l]) => l.day === day && !l.archived && !l.hidden);
+    if (activeGroup !== 'all') {
+      entries = entries.filter(([,l]) => {
+        const g = Array.isArray(l.group) ? l.group : (l.group ? [l.group] : []);
+        return g.length === 0 || g.includes(activeGroup);
+      });
+    }
+    entries.sort((a,b) => a[1].time.localeCompare(b[1].time));
+
+    const hc = dayHeaderColors[day] || '#eee';
+    const tc = dayTextColors[day] || '#333';
+
+    html += `<div style="margin-bottom:14px;border-radius:16px;overflow:hidden;border:1px solid rgba(0,0,0,0.08);box-shadow:0 2px 8px rgba(0,0,0,0.07)">
+      <div style="padding:10px 16px;background:${hc};display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:14px;font-weight:800;color:${tc}">${day}</span>
+        <span style="font-size:11px;font-weight:600;color:${tc};opacity:.7;background:rgba(255,255,255,0.5);padding:2px 10px;border-radius:100px">${entries.length} занять</span>
+      </div>
+      <div style="background:white;padding:8px">`;
+
+    if (!entries.length) {
+      html += `<div style="text-align:center;padding:16px;font-size:12px;color:#aaa">Занять немає</div>`;
+    } else {
+      entries.forEach(([,l]) => {
+        const bg = typeBg[l.type] || '#f5f5f5';
+        const clr = typeColors[l.type] || '#333';
+        const lbl = typeLabelsLocal[l.type] || l.type;
+        const groups2 = Array.isArray(l.group) ? l.group : (l.group ? [l.group] : []);
+        const grpTag = groups2.length ? `<span style="font-size:10px;padding:2px 7px;background:rgba(29,158,117,0.1);color:#0a5c43;border-radius:100px;font-weight:700">${groups2.join(', ')}</span>` : '';
+        html += `
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 8px;border-radius:10px;margin-bottom:4px;background:#fafffe;border:1px solid rgba(0,0,0,0.05)">
+            <div style="min-width:54px;font-size:13px;font-weight:800;color:#0a0a0f;line-height:1.3">${l.time}<div style="font-size:10px;color:#999;font-weight:500">${l.dur} год</div></div>
+            <div style="width:1.5px;height:34px;background:linear-gradient(to bottom,transparent,rgba(0,0,0,0.1),transparent);flex-shrink:0"></div>
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:700;color:#0a0a0f">${l.subject}</div>
+              <div style="font-size:11px;color:#888;margin-top:2px;display:flex;align-items:center;gap:5px">👤 ${l.teacher} ${grpTag}</div>
+            </div>
+            <span style="font-size:11px;padding:3px 9px;border-radius:100px;background:${bg};color:${clr};font-weight:700;white-space:nowrap">${lbl}</span>
+            <span style="font-size:11px;padding:3px 9px;border-radius:8px;background:#f5f5f5;color:#555;font-weight:600;white-space:nowrap">🚪 ${l.room}</span>
+          </div>`;
+      });
+    }
+    html += `</div></div>`;
+  });
+
+  html += `<div style="text-align:center;margin-top:16px;font-size:11px;color:#bbb">Згенеровано автоматично · rozklad-zanyat.web.app</div>`;
+
+  const canvas = document.getElementById('exportCanvas');
+  canvas.innerHTML = html;
+
+  try {
+    await new Promise(r => setTimeout(r, 200));
+    const cvs = await html2canvas(canvas, {
+      scale: 2, useCORS: true, allowTaint: true,
+      backgroundColor: '#f0faf6',
+      width: 900, windowWidth: 900
+    });
+
+    if (exportFormat === 'png') {
+      const link = document.createElement('a');
+      link.download = `rozklad_${groupLabel}_${new Date().toLocaleDateString('uk-UA').replace(/\./g,'-')}.png`;
+      link.href = cvs.toDataURL('image/png');
+      link.click();
+      showToast('🖼 Картинку збережено', 'green');
+    } else {
+      const { jsPDF } = window.jspdf;
+      const imgW = 210; // A4 mm
+      const imgH = cvs.height * imgW / cvs.width;
+      const pdf = new jsPDF({ orientation: imgH > 297 ? 'p' : 'p', unit: 'mm', format: 'a4' });
+      let y = 0;
+      const pageH = 297;
+      while (y < imgH) {
+        if (y > 0) pdf.addPage();
+        pdf.addImage(cvs.toDataURL('image/png'), 'PNG', 0, -y, imgW, imgH);
+        y += pageH;
+      }
+      pdf.save(`rozklad_${groupLabel}_${new Date().toLocaleDateString('uk-UA').replace(/\./g,'-')}.pdf`);
+      showToast('📄 PDF збережено', 'green');
+    }
+  } catch(e) {
+    showToast('❌ Помилка генерації', 'red');
+    console.error(e);
+  }
+
+  canvas.innerHTML = '';
+  progress.classList.remove('show');
+  closeModal();
 };
 
 // Auto-refresh highlighting every minute
