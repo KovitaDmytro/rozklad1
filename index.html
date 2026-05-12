@@ -794,20 +794,32 @@
   <div class="header-actions">
     <button class="glass-btn login-btn" id="loginBtn" onclick="openLogin()"><i class="ti ti-lock"></i> Вхід</button>
     <button class="glass-btn" id="catalogBtn" onclick="openCatalog()" style="display:none"><i class="ti ti-books"></i> Каталог</button>
+    <button class="glass-btn" id="groupsBtn" onclick="openGroupLinks()" style="display:none"><i class="ti ti-link"></i> Посилання</button>
     <button class="glass-btn" id="archiveBtn" onclick="openArchive()" style="display:none"><i class="ti ti-archive"></i> Архів</button>
     <button class="glass-btn logout glass-btn logout-btn" id="logoutBtn" onclick="doLogout()"><i class="ti ti-logout"></i> Вийти</button>
   </div>
 </div>
 
 <div class="content">
-  <!-- Group selector -->
-  <div class="group-section" id="groupSection">
+  <!-- Group header — shown to student (when ?group= is set and not admin) -->
+  <div id="studentGroupHeader" style="display:none;align-items:center;gap:10px;margin-bottom:12px;padding:12px 16px;border-radius:var(--radius-md);background:rgba(255,255,255,0.35);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.5)">
+    <i class="ti ti-users" style="color:#1D9E75;font-size:18px"></i>
+    <span id="studentGroupName" style="font-size:15px;font-weight:700;color:var(--text-primary)"></span>
+  </div>
+
+  <!-- Group selector — shown only to admin -->
+  <div class="group-section" id="groupSection" style="display:none">
     <div class="group-section-title">
       <i class="ti ti-users" style="font-size:14px"></i> Оберіть групу
     </div>
-    <div class="group-tabs" id="groupTabs">
-      <!-- Рендериться динамічно через JS -->
-    </div>
+    <div class="group-tabs" id="groupTabs"></div>
+  </div>
+
+  <!-- No-group landing — shown if no ?group= param and not admin -->
+  <div id="noGroupScreen" style="display:none;text-align:center;padding:60px 20px">
+    <div style="font-size:48px;margin-bottom:16px">📅</div>
+    <div style="font-size:20px;font-weight:800;color:var(--text-primary);margin-bottom:8px">Розклад занять</div>
+    <div style="font-size:14px;color:var(--text-secondary);line-height:1.6">Зверніться до адміністратора,<br>щоб отримати посилання вашої групи.</div>
   </div>
 
   <div class="info-bar" id="infoBar">
@@ -874,7 +886,20 @@ const lessonsRef = ref(db, 'lessons');
 const subjectsRef = ref(db, 'catalog/subjects');
 const teachersRef = ref(db, 'catalog/teachers');
 
-// Отримуємо унікальні групи з уроків
+// ── URL slug helpers ──────────────────────────────────
+function slugify(name) {
+  const map = {'а':'a','б':'b','в':'v','г':'g','ґ':'g','д':'d','е':'e','є':'ye','ж':'zh','з':'z','и':'y','і':'i','ї':'yi','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f','х':'kh','ц':'ts','ч':'ch','ш':'sh','щ':'shch','ь':'','ю':'yu','я':'ya'};
+  return name.toLowerCase().split('').map(c => map[c] || c).join('')
+    .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+}
+function getGroupBySlug(slug, groups) {
+  return groups.find(g => slugify(g) === slug) || null;
+}
+function getGroupFromURL() {
+  return new URLSearchParams(window.location.search).get('group');
+}
+
+// ── Отримуємо унікальні групи ─────────────────────────
 function getGroups() {
   const groups = new Set();
   Object.values(lessons).forEach(l => {
@@ -885,34 +910,72 @@ function getGroups() {
   return [...groups].sort();
 }
 
-// Оновлюємо кнопки груп
-let groupsExpanded = false;
+// ── Оновлення UI залежно від ролі ─────────────────────
+function updateLayout() {
+  const slug = getGroupFromURL();
+  const groups = getGroups();
+  const matched = slug ? getGroupBySlug(slug, groups) : null;
 
+  const studentHeader = document.getElementById('studentGroupHeader');
+  const groupSection  = document.getElementById('groupSection');
+  const noGroupScreen = document.getElementById('noGroupScreen');
+  const toolbar       = document.querySelector('.toolbar');
+  const grid          = document.getElementById('daysGrid');
+  const infoBar       = document.getElementById('infoBar');
+
+  if (isAdmin) {
+    // Адмін — показуємо всі таби груп
+    studentHeader.style.display = 'none';
+    groupSection.style.display  = 'flex';
+    noGroupScreen.style.display = 'none';
+    if (toolbar) toolbar.style.display = 'flex';
+    if (grid) grid.style.display = '';
+    infoBar.style.display = 'none';
+    renderGroupTabs();
+    render();
+    document.title = 'Розклад — Адмін';
+  } else if (matched) {
+    // Студент із правильним посиланням
+    activeGroup = matched;
+    studentHeader.style.display = 'flex';
+    document.getElementById('studentGroupName').textContent = matched;
+    groupSection.style.display  = 'none';
+    noGroupScreen.style.display = 'none';
+    if (toolbar) toolbar.style.display = 'flex';
+    if (grid) grid.style.display = '';
+    infoBar.style.display = 'flex';
+    render();
+    document.title = `Розклад — ${matched}`;
+  } else {
+    // Немає параметра або невідомий slug — заглушка
+    studentHeader.style.display = 'none';
+    groupSection.style.display  = 'none';
+    noGroupScreen.style.display = 'block';
+    if (toolbar) toolbar.style.display = 'none';
+    if (grid) grid.style.display = 'none';
+    infoBar.style.display = 'none';
+    document.title = 'Розклад занять';
+  }
+}
+
+// ── Рендер табів груп (тільки для адміна) ─────────────
+let groupsExpanded = false;
 function renderGroupTabs() {
   const groups = getGroups();
   const tabs = document.getElementById('groupTabs');
   tabs.innerHTML = '';
-
   const isMobile = window.innerWidth <= 600;
-
-  // Toggle button — тільки на мобільному
   if (isMobile) {
     const toggleBtn = document.createElement('button');
     toggleBtn.className = 'groups-toggle-btn';
     toggleBtn.innerHTML = groupsExpanded
       ? '<i class="ti ti-chevron-up" style="font-size:14px"></i> Приховати групи'
       : '<i class="ti ti-chevron-down" style="font-size:14px"></i> Показати групи';
-    toggleBtn.addEventListener('click', () => {
-      groupsExpanded = !groupsExpanded;
-      renderGroupTabs();
-    });
+    toggleBtn.addEventListener('click', () => { groupsExpanded = !groupsExpanded; renderGroupTabs(); });
     tabs.appendChild(toggleBtn);
   }
-
-  // Group list — на десктопі завжди відкрито
   const list = document.createElement('div');
   list.className = 'group-tabs-list' + (!isMobile || groupsExpanded ? ' open' : '');
-
   groups.forEach(g => {
     const btn = document.createElement('button');
     btn.className = 'group-tab' + (activeGroup === g ? ' active' : '');
@@ -920,42 +983,35 @@ function renderGroupTabs() {
     btn.addEventListener('click', () => { activeGroup = g; renderGroupTabs(); render(); });
     list.appendChild(btn);
   });
-
-
   tabs.appendChild(list);
 }
 
-
-
 onValue(subjectsRef, (snap) => { catalogSubjects = snap.val() || {}; });
 onValue(teachersRef, (snap) => { catalogTeachers = snap.val() || {}; });
-
 onValue(ref(db, 'groups'), (snap) => {
   extraGroups = snap.val() || {};
-  renderGroupTabs();
+  updateLayout();
 });
-
 onValue(lessonsRef, (snap) => {
   lessons = snap.val() || {};
-  // Якщо ще не обрана група — ставимо першу доступну
-  if (activeGroup === 'all') {
+  // Адмін: якщо ще не обрана — перша група
+  if (isAdmin && activeGroup === 'all') {
     const groups = getGroups();
     if (groups.length > 0) { activeGroup = groups[0]; groupsExpanded = true; }
   }
-  renderGroupTabs();
-  render();
+  updateLayout();
 });
 
 onAuthStateChanged(auth, (user) => {
   isAdmin = !!user;
-  document.getElementById('adminBadge').style.display = isAdmin ? 'inline-flex' : 'none';
-  document.getElementById('loginBtn').style.display = isAdmin ? 'none' : 'flex';
-  document.getElementById('logoutBtn').style.display = isAdmin ? 'flex' : 'none';
-  document.getElementById('addBtn').style.display = isAdmin ? 'flex' : 'none';
-  document.getElementById('catalogBtn').style.display = isAdmin ? 'flex' : 'none';
-  document.getElementById('archiveBtn').style.display = isAdmin ? 'flex' : 'none';
-  document.getElementById('infoBar').style.display = isAdmin ? 'none' : 'flex';
-  render();
+  document.getElementById('adminBadge').style.display  = isAdmin ? 'inline-flex' : 'none';
+  document.getElementById('loginBtn').style.display    = isAdmin ? 'none' : 'flex';
+  document.getElementById('logoutBtn').style.display   = isAdmin ? 'flex' : 'none';
+  document.getElementById('addBtn').style.display      = isAdmin ? 'flex' : 'none';
+  document.getElementById('catalogBtn').style.display  = isAdmin ? 'flex' : 'none';
+  document.getElementById('groupsBtn').style.display   = isAdmin ? 'flex' : 'none';
+  document.getElementById('archiveBtn').style.display  = isAdmin ? 'flex' : 'none';
+  updateLayout();
 });
 
 // --- Current lesson detection ---
