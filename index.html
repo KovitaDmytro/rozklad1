@@ -915,6 +915,8 @@ function updateLayout() {
   const slug = getGroupFromURL();
   const groups = getGroups();
   const matched = slug ? getGroupBySlug(slug, groups) : null;
+  // Студент: завжди синхронізуємо activeGroup зі slug
+  if (!isAdmin && matched) activeGroup = matched;
 
   const studentHeader = document.getElementById('studentGroupHeader');
   const groupSection  = document.getElementById('groupSection');
@@ -994,8 +996,13 @@ onValue(ref(db, 'groups'), (snap) => {
 });
 onValue(lessonsRef, (snap) => {
   lessons = snap.val() || {};
-  // Адмін: якщо ще не обрана — перша група
-  if (isAdmin && activeGroup === 'all') {
+  const slug = getGroupFromURL();
+  if (!isAdmin && slug) {
+    // Студент: завжди відновлюємо групу зі slug
+    const matched = getGroupBySlug(slug, getGroups());
+    if (matched) activeGroup = matched;
+  } else if (isAdmin && activeGroup === 'all') {
+    // Адмін: якщо ще не обрана — перша група
     const groups = getGroups();
     if (groups.length > 0) { activeGroup = groups[0]; groupsExpanded = true; }
   }
