@@ -885,6 +885,40 @@ const typeLabels = {lec:'Лекція',prac:'Практика',lab:'Лабора
 const lessonsRef = ref(db, 'lessons');
 const subjectsRef = ref(db, 'catalog/subjects');
 const teachersRef = ref(db, 'catalog/teachers');
+const settingsRef = ref(db, 'settings');
+
+// ── Пари ─────────────────────────────────────────────
+const PERIODS = [
+  { num: 'І',    start: '08:30', end: '09:50' },
+  { num: 'ІІ',   start: '10:00', end: '11:20' },
+  { num: 'ІІІ',  start: '11:40', end: '13:00' },
+  { num: 'ІV',   start: '13:10', end: '14:30' },
+  { num: 'V',    start: '14:40', end: '16:00' },
+  { num: 'VІ',   start: '16:10', end: '17:30' },
+  { num: 'VІІ',  start: '17:40', end: '19:00' },
+];
+
+let semesterStart = null; // дата початку семестру (рядок YYYY-MM-DD з Firebase)
+let appSettings = {};
+
+// Повертає 1 або 2 (номер навчального тижня відносно дати початку семестру)
+function getCurrentWeekNum() {
+  if (!semesterStart) return 1;
+  const start = new Date(semesterStart);
+  start.setHours(0,0,0,0);
+  const now = new Date();
+  now.setHours(0,0,0,0);
+  const diffDays = Math.floor((now - start) / 86400000);
+  if (diffDays < 0) return 1;
+  const weekIndex = Math.floor(diffDays / 7); // 0-based
+  return (weekIndex % 2) + 1; // 1 або 2
+}
+
+// Знаходить пару за часом початку (08:30 → 'І' тощо)
+function getPeriodByTime(time) {
+  if (!time) return null;
+  return PERIODS.find(p => p.start === time) || null;
+}
 
 // ── URL slug helpers ──────────────────────────────────
 function slugify(name) {
@@ -990,6 +1024,11 @@ function renderGroupTabs() {
 
 onValue(subjectsRef, (snap) => { catalogSubjects = snap.val() || {}; });
 onValue(teachersRef, (snap) => { catalogTeachers = snap.val() || {}; });
+onValue(settingsRef, (snap) => {
+  appSettings = snap.val() || {};
+  semesterStart = appSettings.semesterStart || null;
+  updateLayout();
+});
 onValue(ref(db, 'groups'), (snap) => {
   extraGroups = snap.val() || {};
   updateLayout();
@@ -1027,14 +1066,25 @@ function getCurrentLesson(lessonList) {
   const now = new Date();
   const todayUk = dayNamesUk[now.getDay()];
   const nowMins = now.getHours() * 60 + now.getMinutes();
+  const currentWeek = getCurrentWeekNum();
   const active = new Set();
   lessonList.forEach(([id, l]) => {
     if (l.day !== todayUk) return;
+    // Фільтр тижня
+    if (l.week && l.week !== 'all' && parseInt(l.week) !== currentWeek) return;
     const match = l.time && l.time.match(/^(\d{1,2}):(\d{2})/);
     if (!match) return;
     const start = parseInt(match[1]) * 60 + parseInt(match[2]);
-    const dur = parseFloat(l.dur) || 1.5;
-    const end = start + Math.round(dur * 60);
+    // Шукаємо кінець пари з PERIODS, або +80 хв за замовчуванням
+    const period = getPeriodByTime(l.time);
+    let end;
+    if (period) {
+      const [eh, em] = period.end.split(':').map(Number);
+      end = eh * 60 + em;
+    } else {
+      const dur = parseFloat(l.dur) || 1.5;
+      end = start + Math.round(dur * 60);
+    }
     if (nowMins >= start && nowMins < end) active.add(id);
   });
   return active;
@@ -1043,6 +1093,7 @@ function getCurrentLesson(lessonList) {
 function render() {
   const grid = document.getElementById('daysGrid');
   const filtered = activeDay === 'all' ? days : days.filter(d => d === activeDay);
+  const currentWeek = getCurrentWeekNum();
 
   const allEntries = Object.entries(lessons);
   const currentIds = getCurrentLesson(allEntries);
@@ -1050,7 +1101,7 @@ function render() {
   grid.innerHTML = filtered.map((day, idx) => {
     let entries = Object.entries(lessons).filter(([, l]) => l.day === day);
 
-    // Фільтр по групі: 'all' = без фільтру, інакше — тільки спільні (без групи) + обрана група
+    // Фільтр по групі
     if (activeGroup !== 'all') {
       entries = entries.filter(([, l]) => {
         const g = Array.isArray(l.group) ? l.group : (l.group ? [l.group] : []);
@@ -1058,29 +1109,64 @@ function render() {
       });
     }
 
-    // Архівовані — не показувати нікому в розкладі
+    // Архівовані — не показувати
     entries = entries.filter(([, l]) => !l.archived);
 
-    // Приховані — лише адмін бачить
+    // Приховані — лише адмін
     if (!isAdmin) {
       entries = entries.filter(([, l]) => !l.hidden);
     }
 
-    entries.sort((a, b) => a[1].time.localeCompare(b[1].time));
+    // Фільтр тижня (щотижня або відповідний тиждень)
+    const visibleEntries = entries.filter(([, l]) => {
+      if (!l.week || l.week === 'all') return true;
+      return parseInt(l.week) === currentWeek;
+    });
+
+    // Будуємо map: час → заняття
+    const lessonsByTime = {};
+    visibleEntries.forEach(([id, l]) => {
+      lessonsByTime[l.time] = lessonsByTime[l.time] || [];
+      lessonsByTime[l.time].push([id, l]);
+    });
 
     const cls = dayCls[day] || '';
-    const isSat = day === 'Субота';
 
-    const rows = entries.length
-      ? entries.map(([id, l]) => {
-          const groupArr2 = Array.isArray(l.group) ? l.group : (l.group ? [l.group] : []);
-          const isShared = groupArr2.length === 0;
-          const groupLabel = !isShared ? `<span class="group-badge-lesson"><i class="ti ti-users" style="font-size:9px"></i> ${groupArr2.join(', ')}</span>` : '';
-          const isCurrent = currentIds.has(id);
-          const nowBadge = isCurrent ? '<span class="now-badge"><i class="ti ti-broadcast" style="font-size:10px"></i> ЗАРАЗ</span>' : '';
-          return `
-          <div class="lesson-row${l.hidden ? ' is-hidden' : ''}${isCurrent ? ' is-current' : ''}">
-            <div class="time-col">${l.time}<div class="time-dur">${l.dur} год</div></div>
+    // Рядки по кожній парі
+    const rows = PERIODS.map(period => {
+      const periodLessons = lessonsByTime[period.start] || [];
+      const isCurrent = new Date().getHours() * 60 + new Date().getMinutes() >= (() => { const [h,m] = period.start.split(':'); return +h*60+ +m; })()
+        && new Date().getHours() * 60 + new Date().getMinutes() < (() => { const [h,m] = period.end.split(':'); return +h*60+ +m; })()
+        && dayNamesUk[new Date().getDay()] === day;
+
+      if (periodLessons.length === 0) {
+        // Порожня пара — показуємо заглушку
+        return `
+          <div class="lesson-row period-empty">
+            <div class="period-num-col">${period.num}</div>
+            <div class="period-time-col">${period.start}<span class="period-time-end">${period.end}</span></div>
+            <div class="divider-line" style="opacity:.3"></div>
+            <div class="subject-col" style="opacity:.35">
+              <div class="subject-name" style="font-size:12px;font-weight:500;color:var(--text-tertiary)">— вільно —</div>
+            </div>
+          </div>`;
+      }
+
+      return periodLessons.map(([id, l]) => {
+        const groupArr2 = Array.isArray(l.group) ? l.group : (l.group ? [l.group] : []);
+        const isShared = groupArr2.length === 0;
+        const groupLabel = !isShared ? `<span class="group-badge-lesson"><i class="ti ti-users" style="font-size:9px"></i> ${groupArr2.join(', ')}</span>` : '';
+        const isCurrentLesson = currentIds.has(id);
+        const nowBadge = isCurrentLesson ? '<span class="now-badge"><i class="ti ti-broadcast" style="font-size:10px"></i> ЗАРАЗ</span>' : '';
+        // Значок тижня
+        let weekBadge = '';
+        if (l.week && l.week !== 'all') {
+          weekBadge = `<span class="week-badge w${l.week}">${l.week}-й тижд.</span>`;
+        }
+        return `
+          <div class="lesson-row${l.hidden ? ' is-hidden' : ''}${isCurrentLesson ? ' is-current' : ''}">
+            <div class="period-num-col">${period.num}</div>
+            <div class="period-time-col">${period.start}<span class="period-time-end">${period.end}</span></div>
             <div class="divider-line"></div>
             <div class="subject-col">
               <div class="subject-name">${l.subject}</div>
@@ -1088,7 +1174,7 @@ function render() {
             </div>
             ${nowBadge}
             <span class="type-badge type-${l.type}">${typeLabels[l.type] || l.type}</span>
-            ${l.week && l.week !== 'all' ? `<span class="week-badge w${l.week}">${l.week}-й тижд.</span>` : ''}
+            ${weekBadge}
             <span class="room-badge"><i class="ti ti-door" style="font-size:13px"></i>${l.room}</span>
             ${l.zoom ? '<a href="' + l.zoom + '" target="_blank" class="zoom-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="6" fill="#2D8CFF"/><path d="M4 8.5C4 7.67 4.67 7 5.5 7h9C15.33 7 16 7.67 16 8.5v7c0 .83-.67 1.5-1.5 1.5h-9C4.67 17 4 16.33 4 15.5v-7zm12 2.1 3.6-2.4A.5.5 0 0 1 20 8.6v6.8a.5.5 0 0 1-.4.49l-3.6-2.4V10.6z" fill="white"/></svg> Zoom</a>' : ''}
             ${isAdmin && l.hidden ? '<span class="hidden-badge"><i class="ti ti-eye-off" style="font-size:10px"></i> Приховано</span>' : ''}
@@ -1099,13 +1185,14 @@ function render() {
               <button class="btn-del" onclick="confirmDelete('${id}')"><i class="ti ti-trash"></i></button>
             </div>` : ''}
           </div>`;
-        }).join('')
-      : `<div class="empty-day"><i class="ti ti-calendar-off"></i> Занять немає${isAdmin ? ' — натисніть «Додати заняття»' : ''}</div>`;
+      }).join('');
+    }).join('');
 
-    return `<div class="day-block ${isSat ? 'sat' : ''} ${cls}" style="animation-delay:${idx * 0.05}s">
+    const totalVisible = visibleEntries.length;
+    return `<div class="day-block ${cls}" style="animation-delay:${idx * 0.05}s">
       <div class="day-header">
-        <span class="day-name">${isSat ? '📅 ' : ''}${day}</span>
-        <span class="day-count">${entries.length} занять</span>
+        <span class="day-name">${day}</span>
+        <span class="day-count">${totalVisible} занять</span>
       </div>
       <div class="lessons">${rows}</div>
     </div>`;
