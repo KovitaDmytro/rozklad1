@@ -418,6 +418,28 @@
     cursor: pointer; font-size: 12px; color: #1D6B3A; font-weight: 600; transition: all 0.15s;
   }
   .btn-dup:hover { background: rgba(180,235,195,0.7); }
+  /* ── CURRENT LESSON HIGHLIGHT ── */
+  .lesson-row.is-current {
+    background: rgba(29,158,117,0.18) !important;
+    border-color: rgba(29,158,117,0.55) !important;
+    box-shadow: 0 0 0 2px rgba(29,158,117,0.22), 0 4px 20px rgba(29,158,117,0.18), 0 1px 0 rgba(255,255,255,0.7) inset !important;
+    transform: translateY(-1px);
+  }
+  .lesson-row.is-current .subject-name { color: #085041; }
+  .now-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 9px; border-radius: 100px;
+    background: linear-gradient(135deg, #1D9E75, #27ae7a);
+    color: white; font-size: 10px; font-weight: 800;
+    letter-spacing: 0.05em; white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(29,158,117,0.45);
+    animation: nowPulse 2s ease-in-out infinite;
+  }
+  @keyframes nowPulse {
+    0%,100% { box-shadow: 0 2px 8px rgba(29,158,117,0.45); }
+    50% { box-shadow: 0 2px 16px rgba(29,158,117,0.75); }
+  }
+
   .lesson-row.is-hidden {
     opacity: 0.45;
     border-style: dashed;
@@ -871,9 +893,31 @@ onAuthStateChanged(auth, (user) => {
   render();
 });
 
+// --- Current lesson detection ---
+const dayNamesUk = ['Неділя','Понеділок','Вівторок','Середа','Четвер','Пятниця','Субота'];
+function getCurrentLesson(lessonList) {
+  const now = new Date();
+  const todayUk = dayNamesUk[now.getDay()];
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+  const active = new Set();
+  lessonList.forEach(([id, l]) => {
+    if (l.day !== todayUk) return;
+    const match = l.time && l.time.match(/^(\d{1,2}):(\d{2})/);
+    if (!match) return;
+    const start = parseInt(match[1]) * 60 + parseInt(match[2]);
+    const dur = parseFloat(l.dur) || 1.5;
+    const end = start + Math.round(dur * 60);
+    if (nowMins >= start && nowMins < end) active.add(id);
+  });
+  return active;
+}
+
 function render() {
   const grid = document.getElementById('daysGrid');
   const filtered = activeDay === 'all' ? days : days.filter(d => d === activeDay);
+
+  const allEntries = Object.entries(lessons);
+  const currentIds = getCurrentLesson(allEntries);
 
   grid.innerHTML = filtered.map((day, idx) => {
     let entries = Object.entries(lessons).filter(([, l]) => l.day === day);
@@ -904,14 +948,17 @@ function render() {
           const groupArr2 = Array.isArray(l.group) ? l.group : (l.group ? [l.group] : []);
           const isShared = groupArr2.length === 0;
           const groupLabel = !isShared ? `<span class="group-badge-lesson"><i class="ti ti-users" style="font-size:9px"></i> ${groupArr2.join(', ')}</span>` : '';
+          const isCurrent = currentIds.has(id);
+          const nowBadge = isCurrent ? '<span class="now-badge"><i class="ti ti-broadcast" style="font-size:10px"></i> ЗАРАЗ</span>' : '';
           return `
-          <div class="lesson-row${l.hidden ? ' is-hidden' : ''}">
+          <div class="lesson-row${l.hidden ? ' is-hidden' : ''}${isCurrent ? ' is-current' : ''}">
             <div class="time-col">${l.time}<div class="time-dur">${l.dur} год</div></div>
             <div class="divider-line"></div>
             <div class="subject-col">
               <div class="subject-name">${l.subject}</div>
               <div class="subject-meta"><i class="ti ti-user" style="font-size:11px"></i> ${l.teacher} ${groupLabel}</div>
             </div>
+            ${nowBadge}
             <span class="type-badge type-${l.type}">${typeLabels[l.type] || l.type}</span>
             ${l.week && l.week !== 'all' ? `<span class="week-badge w${l.week}">${l.week}-й тижд.</span>` : ''}
             <span class="room-badge"><i class="ti ti-door" style="font-size:13px"></i>${l.room}</span>
@@ -1265,6 +1312,9 @@ window.doLogout = async () => {
   await signOut(auth);
   showToast('👋 Ви вийшли з системи', 'red');
 };
+
+// Auto-refresh highlighting every minute
+setInterval(() => { render(); }, 60000);
 function showToast(msg, type) {
   const t = document.getElementById('toast');
   document.getElementById('toastMsg').textContent = msg;
