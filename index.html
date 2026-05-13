@@ -1332,30 +1332,29 @@ function renderCatalogModal() {
     const groups = getGroups();
     listHTML = groups.length
       ? groups.map(g => `
-          <div class="catalog-item" id="gitem-${g.id}">
+          <div class="catalog-item" data-gid="${g.id}" data-gname="${g.name.replace(/"/g,'&quot;')}">
             <div class="catalog-item-info" style="flex:1">
-              <div class="catalog-item-name" id="gname-${g.id}">
+              <div class="gname-view" style="display:flex;align-items:center;gap:6px">
                 <i class="ti ti-users" style="font-size:12px;opacity:.6"></i>
-                <span class="gname-text">${g.name}</span>
-                <span style="font-size:10px;font-weight:600;color:var(--text-tertiary);background:rgba(0,0,0,0.06);padding:1px 6px;border-radius:100px;margin-left:4px">#${g.id}</span>
+                <span class="gname-text" style="font-size:13px;font-weight:700;color:var(--text-primary)">${g.name}</span>
+                <span style="font-size:10px;font-weight:600;color:var(--text-tertiary);background:rgba(0,0,0,0.06);padding:1px 6px;border-radius:100px">#${g.id}</span>
               </div>
-              <div class="gname-edit" id="gedit-${g.id}" style="display:none;display-flex;align-items:center;gap:6px;margin-top:4px">
-                <input id="ginput-${g.id}" value="${g.name}" maxlength="30"
-                  style="padding:5px 10px;border-radius:10px;border:1px solid rgba(29,158,117,0.4);background:rgba(255,255,255,0.6);font-size:13px;font-weight:600;font-family:inherit;outline:none;width:160px"
-                  onkeydown="if(event.key==='Enter')saveGroupName('${g.id}','${g.name}');if(event.key==='Escape')cancelGroupEdit('${g.id}','${g.name}')" />
-                <button onclick="saveGroupName('${g.id}','${g.name}')" style="padding:5px 10px;border-radius:100px;border:none;background:linear-gradient(135deg,#1D9E75,#0F6E56);color:white;font-size:12px;font-weight:700;cursor:pointer"><i class="ti ti-check"></i></button>
-                <button onclick="cancelGroupEdit('${g.id}','${g.name}')" style="padding:5px 10px;border-radius:100px;border:1px solid rgba(0,0,0,0.1);background:rgba(0,0,0,0.05);color:#666;font-size:12px;font-weight:700;cursor:pointer"><i class="ti ti-x"></i></button>
+              <div class="gname-edit" style="display:none;align-items:center;gap:6px;margin-top:4px">
+                <input class="ginput" value="${g.name.replace(/"/g,'&quot;')}" maxlength="30"
+                  style="padding:5px 10px;border-radius:10px;border:1px solid rgba(29,158,117,0.4);background:rgba(255,255,255,0.6);font-size:13px;font-weight:600;font-family:inherit;outline:none;width:160px" />
+                <button class="gbtn-save" style="padding:5px 10px;border-radius:100px;border:none;background:linear-gradient(135deg,#1D9E75,#0F6E56);color:white;font-size:12px;font-weight:700;cursor:pointer"><i class="ti ti-check"></i></button>
+                <button class="gbtn-cancel" style="padding:5px 10px;border-radius:100px;border:1px solid rgba(0,0,0,0.1);background:rgba(0,0,0,0.05);color:#666;font-size:12px;font-weight:700;cursor:pointer"><i class="ti ti-x"></i></button>
               </div>
             </div>
             <div style="display:flex;gap:6px;flex-shrink:0">
-              <button class="btn-cat-edit" onclick="startGroupEdit('${g.id}','${g.name}')"><i class="ti ti-pencil"></i></button>
-              <button class="btn-cat-del" onclick="deleteGroup('${g.name}')"><i class="ti ti-trash"></i></button>
+              <button class="btn-cat-edit gbtn-edit"><i class="ti ti-pencil"></i></button>
+              <button class="btn-cat-del gbtn-del"><i class="ti ti-trash"></i></button>
             </div>
           </div>`).join('')
       : '<div class="archive-empty"><i class="ti ti-users" style="font-size:28px;display:block;margin-bottom:8px;opacity:.3"></i>Груп немає</div>';
     addRow = `<div class="catalog-add-row">
-        <input id="catName" placeholder="Назва групи (напр. ІПЗ-23-1)" maxlength="30" onkeydown="if(event.key==='Enter')addGroupFromCatalog()" />
-        <button class="btn-cat-add" onclick="addGroupFromCatalog()"><i class="ti ti-plus"></i> Додати</button>
+        <input id="catName" placeholder="Назва групи (напр. ІПЗ-23-1)" maxlength="30" />
+        <button class="btn-cat-add" id="catAddBtn"><i class="ti ti-plus"></i> Додати</button>
       </div>`;
   } else {
     const items = isSubjects ? catalogSubjects : catalogTeachers;
@@ -1383,7 +1382,8 @@ function renderCatalogModal() {
         </div>`;
   }
 
-  document.getElementById('modal').innerHTML = `
+  const modal = document.getElementById('modal');
+  modal.innerHTML = `
     <div class="modal-title"><i class="ti ti-books"></i> Каталог</div>
     <div class="catalog-tabs">
       <button class="catalog-tab ${isSubjects ? 'active' : ''}" onclick="switchCatalogTab('subjects')"><i class="ti ti-book"></i> Предмети</button>
@@ -1396,6 +1396,62 @@ function renderCatalogModal() {
       <button class="btn-cancel" onclick="closeModal()">Закрити</button>
     </div>`;
   document.getElementById('overlay').classList.add('open');
+
+  // Bind group events via addEventListener (safe for any group name)
+  if (isGroups) {
+    // Add button
+    const catAddBtn = document.getElementById('catAddBtn');
+    const catNameIn = document.getElementById('catName');
+    if (catAddBtn) catAddBtn.addEventListener('click', addGroupFromCatalog);
+    if (catNameIn) catNameIn.addEventListener('keydown', e => { if (e.key === 'Enter') addGroupFromCatalog(); });
+
+    // Per-row buttons
+    modal.querySelectorAll('.catalog-item[data-gid]').forEach(item => {
+      const gid  = item.dataset.gid;
+      const gname = item.dataset.gname;
+      const view  = item.querySelector('.gname-view');
+      const editBox = item.querySelector('.gname-edit');
+      const inp   = item.querySelector('.ginput');
+
+      const showEdit = () => {
+        view.style.display = 'none';
+        editBox.style.display = 'flex';
+        inp.focus(); inp.select();
+      };
+      const hideEdit = () => {
+        view.style.display = 'flex';
+        editBox.style.display = 'none';
+        inp.value = gname;
+      };
+      const doSave = async () => {
+        const newName = inp.value.trim();
+        if (!newName) { inp.focus(); return; }
+        if (newName === gname) { hideEdit(); return; }
+        if (getGroups().some(g => g.name === newName)) { alert('Група «' + newName + '» вже існує'); inp.focus(); return; }
+        const entry = Object.entries(extraGroups).find(([, g]) => (typeof g === 'object' ? g.id : '') === gid);
+        if (!entry) return;
+        await update(ref(db, 'groups/' + entry[0]), { name: newName });
+        const updates = {};
+        Object.entries(lessons).forEach(([lid, l]) => {
+          const gs = Array.isArray(l.group) ? l.group : (l.group ? [l.group] : []);
+          if (gs.includes(gname)) updates['lessons/' + lid + '/group'] = gs.map(x => x === gname ? newName : x);
+        });
+        if (Object.keys(updates).length) await update(ref(db), updates);
+        showToast('✅ Групу перейменовано', 'green');
+        renderCatalogModal();
+        renderGroupTabs();
+      };
+
+      item.querySelector('.gbtn-edit').addEventListener('click', showEdit);
+      item.querySelector('.gbtn-cancel').addEventListener('click', hideEdit);
+      item.querySelector('.gbtn-save').addEventListener('click', doSave);
+      inp.addEventListener('keydown', e => {
+        if (e.key === 'Enter') doSave();
+        if (e.key === 'Escape') hideEdit();
+      });
+      item.querySelector('.gbtn-del').addEventListener('click', () => deleteGroup(gname));
+    });
+  }
 }
 
 window.switchCatalogTab = (tab) => { catalogActiveTab = tab; renderCatalogModal(); };
@@ -1440,57 +1496,6 @@ window.deleteGroup = async (name) => {
   renderGroupTabs();
 };
 
-window.startGroupEdit = (id, name) => {
-  // Show input, hide text
-  const nameEl = document.getElementById('gname-' + id);
-  const editEl = document.getElementById('gedit-' + id);
-  if (!nameEl || !editEl) return;
-  nameEl.querySelector('.gname-text').style.display = 'none';
-  nameEl.querySelector('span:last-child').style.display = 'none';
-  editEl.style.display = 'flex';
-  const inp = document.getElementById('ginput-' + id);
-  if (inp) { inp.focus(); inp.select(); }
-};
-
-window.cancelGroupEdit = (id, name) => {
-  const nameEl = document.getElementById('gname-' + id);
-  const editEl = document.getElementById('gedit-' + id);
-  if (!nameEl || !editEl) return;
-  nameEl.querySelector('.gname-text').style.display = '';
-  nameEl.querySelector('span:last-child').style.display = '';
-  editEl.style.display = 'none';
-};
-
-window.saveGroupName = async (id, oldName) => {
-  const inp = document.getElementById('ginput-' + id);
-  if (!inp) return;
-  const newName = inp.value.trim();
-  if (!newName) { inp.focus(); return; }
-  if (newName === oldName) { cancelGroupEdit(id, oldName); return; }
-  if (getGroups().some(g => g.name === newName)) { alert('Група «' + newName + '» вже існує'); inp.focus(); return; }
-
-  // Знайти Firebase-ключ за id
-  const entry = Object.entries(extraGroups).find(([, g]) => (typeof g === 'object' ? g.id : '') === id);
-  if (!entry) return;
-  const fbKey = entry[0];
-
-  // Оновити назву групи в Firebase
-  await update(ref(db, 'groups/' + fbKey), { name: newName });
-
-  // Оновити назву в усіх заняттях
-  const updates = {};
-  Object.entries(lessons).forEach(([lid, l]) => {
-    const gs = Array.isArray(l.group) ? l.group : (l.group ? [l.group] : []);
-    if (gs.includes(oldName)) {
-      updates['lessons/' + lid + '/group'] = gs.map(x => x === oldName ? newName : x);
-    }
-  });
-  if (Object.keys(updates).length) await update(ref(db), updates);
-
-  showToast('✅ Групу перейменовано', 'green');
-  renderCatalogModal();
-  renderGroupTabs();
-};
 
 window.deleteCatalogItem = async (id) => {
   const isSubjects = catalogActiveTab === 'subjects';
