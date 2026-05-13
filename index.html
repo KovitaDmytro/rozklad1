@@ -928,6 +928,7 @@
     <button class="glass-btn" id="catalogBtn" onclick="openCatalog()" style="display:none"><i class="ti ti-books"></i> Каталог</button>
     <button class="glass-btn" id="groupsBtn" onclick="openGroupLinks()" style="display:none"><i class="ti ti-link"></i> Посилання</button>
     <button class="glass-btn" id="archiveBtn" onclick="openArchive()" style="display:none"><i class="ti ti-archive"></i> Архів</button>
+    <button class="glass-btn" id="settingsBtn" onclick="openSettings()" style="display:none"><i class="ti ti-calendar-cog"></i> Налаштування</button>
     <button class="glass-btn logout glass-btn logout-btn" id="logoutBtn" onclick="doLogout()"><i class="ti ti-logout"></i> Вийти</button>
   </div>
 </div>
@@ -1194,6 +1195,7 @@ onAuthStateChanged(auth, (user) => {
   document.getElementById('catalogBtn').style.display  = isAdmin ? 'flex' : 'none';
   document.getElementById('groupsBtn').style.display   = isAdmin ? 'flex' : 'none';
   document.getElementById('archiveBtn').style.display  = isAdmin ? 'flex' : 'none';
+  document.getElementById('settingsBtn').style.display = isAdmin ? 'flex' : 'none';
   updateLayout();
 });
 
@@ -2031,6 +2033,39 @@ window.doExport = async () => {
 
 // Auto-refresh highlighting every minute
 setInterval(() => { render(); }, 60000);
+window.openSettings = () => {
+  const cur = semesterStart || '';
+  const fmt = cur ? new Date(cur).toLocaleDateString('uk-UA', {day:'numeric', month:'long', year:'numeric'}) : 'не вказано';
+  const curWeek = semesterStart ? getCurrentWeekNum() : null;
+  const weekInfo = curWeek ? `<div style="margin-top:8px;font-size:12px;color:#085041;background:rgba(29,158,117,0.1);padding:8px 12px;border-radius:10px;border:1px solid rgba(29,158,117,0.2)"><i class="ti ti-info-circle"></i> Зараз <strong>${curWeek}-й навчальний тиждень</strong></div>` : '<div style="margin-top:8px;font-size:12px;color:#922;background:rgba(220,80,80,0.08);padding:8px 12px;border-radius:10px;border:1px solid rgba(220,80,80,0.2)"><i class="ti ti-alert-triangle"></i> Дата початку не встановлена — тиждень не визначено</div>';
+  document.getElementById('modal').innerHTML = `
+    <div class="modal-title"><i class="ti ti-calendar-cog"></i> Налаштування семестру</div>
+    <div class="field">
+      <label>Дата початку навчання (1-й тиждень)</label>
+      <input id="fSemStart" type="date" value="${cur}" style="font-size:15px">
+      <div style="margin-top:6px;font-size:12px;color:var(--text-secondary)">Поточне значення: <strong>${fmt}</strong></div>
+      ${weekInfo}
+    </div>
+    <div style="font-size:11px;color:var(--text-tertiary);margin-top:4px;line-height:1.6">
+      Ця дата визначає 1-й та 2-й тижні для всіх груп.<br>
+      Тиждень відраховується від понеділка цього тижня.
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Скасувати</button>
+      <button class="btn-save" onclick="saveSettings()"><i class="ti ti-device-floppy"></i> Зберегти</button>
+    </div>`;
+  document.getElementById('overlay').classList.add('open');
+};
+
+window.saveSettings = async () => {
+  const val = document.getElementById('fSemStart').value;
+  if (!val) { alert('Оберіть дату початку навчання'); return; }
+  await update(settingsRef, { semesterStart: val });
+  semesterStart = val;
+  showToast('✅ Дату збережено', 'green');
+  closeModal();
+};
+
 function showToast(msg, type) {
   const t = document.getElementById('toast');
   document.getElementById('toastMsg').textContent = msg;
