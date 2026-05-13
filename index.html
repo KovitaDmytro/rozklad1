@@ -2060,10 +2060,15 @@ window.openSettings = () => {
 window.saveSettings = async () => {
   const val = document.getElementById('fSemStart').value;
   if (!val) { alert('Оберіть дату початку навчання'); return; }
-  await update(settingsRef, { semesterStart: val });
-  semesterStart = val;
-  showToast('✅ Дату збережено', 'green');
-  closeModal();
+  try {
+    await set(ref(db, 'settings/semesterStart'), val);
+    semesterStart = val;
+    showToast('✅ Дату збережено', 'green');
+    closeModal();
+  } catch(e) {
+    console.error('saveSettings error:', e);
+    alert('❌ Помилка збереження: ' + (e.message || e));
+  }
 };
 
 function showToast(msg, type) {
