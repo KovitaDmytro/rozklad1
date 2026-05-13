@@ -806,7 +806,7 @@
 <div class="header">
   <div style="display:flex;align-items:center;gap:10px">
     <div class="logo">
-      <div class="logo-icon" id="logoIcon"><i class="ti ti-calendar-event"></i></div>
+      <div class="logo-icon"><i class="ti ti-calendar-event"></i></div>
       Розклад
     </div>
     <span class="admin-badge" id="adminBadge"><i class="ti ti-shield-check"></i> Адмін</span>
@@ -1087,8 +1087,9 @@ function shortenTeacher(full) {
 
 onAuthStateChanged(auth, (user) => {
   isAdmin = !!user;
+  const isAdminURL = new URLSearchParams(window.location.search).has('admin');
   document.getElementById('adminBadge').style.display  = isAdmin ? 'inline-flex' : 'none';
-  document.getElementById('loginBtn').style.display    = isAdmin ? 'none' : 'none'; // hidden; revealed by secret tap
+  document.getElementById('loginBtn').style.display    = isAdmin ? 'none' : (isAdminURL ? 'flex' : 'none');
   document.getElementById('logoutBtn').style.display   = isAdmin ? 'flex' : 'none';
   document.getElementById('addBtn').style.display      = isAdmin ? 'flex' : 'none';
   document.getElementById('catalogBtn').style.display  = isAdmin ? 'flex' : 'none';
@@ -1802,19 +1803,6 @@ window.doExport = async () => {
 
 // Auto-refresh highlighting every minute
 setInterval(() => { render(); }, 60000);
-
-// Secret tap on logo icon (5 taps) to reveal admin login
-let logoTapCount = 0, logoTapTimer = null;
-document.getElementById('logoIcon').addEventListener('click', () => {
-  logoTapCount++;
-  clearTimeout(logoTapTimer);
-  if (logoTapCount >= 5) {
-    document.getElementById('loginBtn').style.display = 'flex';
-    logoTapCount = 0;
-  } else {
-    logoTapTimer = setTimeout(() => { logoTapCount = 0; }, 1500);
-  }
-});
 function showToast(msg, type) {
   const t = document.getElementById('toast');
   document.getElementById('toastMsg').textContent = msg;
