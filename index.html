@@ -983,19 +983,22 @@ const db = {
   },
   // Polling-based "real-time" listener
   on(path, cb) {
-    if (!_listeners[path]) _listeners[path] = { callbacks: [], last: null };
+    if (!_listeners[path]) _listeners[path] = { callbacks: [], last: null, interval: null };
     _listeners[path].callbacks.push(cb);
+    const entry = _listeners[path];
     const poll = async () => {
+      if (!_listeners[path]) return; // скинуто — виходимо
       const data = await db.get(path);
+      if (!_listeners[path]) return; // могло скинутись під час await
       const json = JSON.stringify(data);
-      if (json !== _listeners[path].last) {
-        _listeners[path].last = json;
-        _listeners[path].callbacks.forEach(fn => fn(data));
+      if (json !== entry.last) {
+        entry.last = json;
+        entry.callbacks.forEach(fn => fn(data));
       }
     };
     poll();
-    if (!_listeners[path].interval) {
-      _listeners[path].interval = setInterval(poll, 5000);
+    if (!entry.interval) {
+      entry.interval = setInterval(poll, 5000);
     }
   }
 };
@@ -1182,9 +1185,11 @@ function startDataListeners() {
   if (_dataLoaded) return;
   _dataLoaded = true;
 
-  // Зупиняємо старі listeners якщо є
-  Object.values(_listeners).forEach(l => { if (l.interval) clearInterval(l.interval); });
-  _listeners = {};
+  // Зупиняємо старі intervals
+  Object.keys(_listeners).forEach(k => {
+    if (_listeners[k].interval) clearInterval(_listeners[k].interval);
+    delete _listeners[k];
+  });
 
   db.on(settingsRef, (d) => {
     appSettings = d || {};
