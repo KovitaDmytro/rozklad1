@@ -777,15 +777,16 @@
     border-color: rgba(29,158,117,0.6);
   }
   .info-popup-wrap {
-    position: absolute; right: 0; top: calc(100% + 8px);
-    z-index: 50; min-width: 220px; max-width: 280px;
+    position: fixed;
+    z-index: 999;
+    min-width: 220px; max-width: 270px;
   }
   .info-popup {
-    background: #ffffff;
-    border: 1px solid rgba(0,0,0,0.08);
+    background: #fff;
+    border: 1px solid rgba(0,0,0,0.10);
     border-radius: 16px;
     padding: 14px 16px;
-    box-shadow: 0 12px 40px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.1);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.14);
     display: flex; flex-direction: column; gap: 8px;
   }
   .info-full-name {
@@ -1337,11 +1338,34 @@ window.toggleInfo = (btn) => {
   const wrap = btn.parentElement.querySelector('.info-popup-wrap');
   if (!wrap) return;
   const isOpen = wrap.style.display !== 'none';
-  // close all others first
-  document.querySelectorAll('.info-popup-wrap').forEach(w => { w.style.display = 'none'; w.closest('.btn-info-wrap')?.querySelector('.btn-info')?.classList.remove('active'); });
+
+  // close all
+  document.querySelectorAll('.info-popup-wrap').forEach(w => { w.style.display = 'none'; });
+  document.querySelectorAll('.btn-info.active').forEach(b => b.classList.remove('active'));
+
   if (!isOpen) {
     wrap.style.display = 'block';
     btn.classList.add('active');
+
+    // Position with fixed coords so it's never clipped
+    const rect = btn.getBoundingClientRect();
+    const popupW = 240;
+    const popupH = wrap.getBoundingClientRect().height || 160;
+    const viewH = window.innerHeight;
+    const viewW = window.innerWidth;
+
+    // Horizontal: align right edge to button, clamp to viewport
+    let left = rect.right - popupW;
+    if (left < 8) left = 8;
+    if (left + popupW > viewW - 8) left = viewW - popupW - 8;
+
+    // Vertical: prefer above button, fallback below
+    let top = rect.top - popupH - 8;
+    if (top < 8) top = rect.bottom + 8;
+
+    wrap.style.left = left + 'px';
+    wrap.style.top = top + 'px';
+    wrap.style.right = 'auto';
   }
 };
 
