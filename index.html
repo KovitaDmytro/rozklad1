@@ -983,23 +983,13 @@ const db = {
   },
   // Polling-based "real-time" listener
   on(path, cb) {
-    if (!_listeners[path]) _listeners[path] = { callbacks: [], last: null, interval: null };
-    _listeners[path].callbacks.push(cb);
-    const entry = _listeners[path];
-    const poll = async () => {
-      if (!_listeners[path]) return; // скинуто — виходимо
+    // Проста версія: одразу fetch, потім кожні 5с
+    const doFetch = async () => {
       const data = await db.get(path);
-      if (!_listeners[path]) return; // могло скинутись під час await
-      const json = JSON.stringify(data);
-      if (json !== entry.last) {
-        entry.last = json;
-        entry.callbacks.forEach(fn => fn(data));
-      }
+      cb(data);
     };
-    poll();
-    if (!entry.interval) {
-      entry.interval = setInterval(poll, 5000);
-    }
+    doFetch();
+    setInterval(doFetch, 5000);
   }
 };
 
@@ -1049,10 +1039,25 @@ function getCurrentWeekNum() {
   return (weekIndex % 2) + 1; // 1 або 2
 }
 
-// Знаходить пару за часом початку (08:30 → 'І' тощо)
+// Знаходить пару за часом початку — точний або найближчий збіг
 function getPeriodByTime(time) {
   if (!time) return null;
-  return PERIODS.find(p => p.start === time) || null;
+  // спочатку точний збіг
+  const exact = PERIODS.find(p => p.start === time);
+  if (exact) return exact;
+  // потім — найближча пара (в межах ±10 хв від початку)
+  const [h, m] = time.split(':').map(Number);
+  if (isNaN(h)) return null;
+  const mins = h * 60 + m;
+  return PERIODS.find(p => {
+    const [ph, pm] = p.start.split(':').map(Number);
+    return Math.abs(ph * 60 + pm - mins) <= 10;
+  }) || null;
+}
+
+// Повертає пару для відображення у сітці (для render)
+function getPeriodForLesson(time) {
+  return getPeriodByTime(time);
 }
 
 // ── URL slug helpers ──────────────────────────────────
@@ -1185,12 +1190,6 @@ function startDataListeners() {
   if (_dataLoaded) return;
   _dataLoaded = true;
 
-  // Зупиняємо старі intervals
-  Object.keys(_listeners).forEach(k => {
-    if (_listeners[k].interval) clearInterval(_listeners[k].interval);
-    delete _listeners[k];
-  });
-
   db.on(settingsRef, (d) => {
     appSettings = d || {};
     semesterStart = appSettings.semesterStart || null;
@@ -1222,8 +1221,6 @@ auth.onAuthStateChanged((user) => {
   document.getElementById('catalogBtn').style.display  = isAdmin ? 'flex' : 'none';
   document.getElementById('groupsBtn').style.display   = isAdmin ? 'flex' : 'none';
   document.getElementById('archiveBtn').style.display  = isAdmin ? 'flex' : 'none';
-  // Після auth — примусово перезавантажуємо дані з токеном
-  _dataLoaded = false;
   startDataListeners();
   updateLayout();
 });
@@ -1290,18 +1287,20 @@ function render() {
       return parseInt(l.week) === currentWeek;
     });
 
-    // Будуємо map: час → заняття
-    const lessonsByTime = {};
+    // Будуємо map: пара.start → заняття (з fuzzy match)
+    const lessonsByPeriod = {};
     visibleEntries.forEach(([id, l]) => {
-      lessonsByTime[l.time] = lessonsByTime[l.time] || [];
-      lessonsByTime[l.time].push([id, l]);
+      const p = getPeriodByTime(l.time);
+      const key = p ? p.start : l.time;
+      lessonsByPeriod[key] = lessonsByPeriod[key] || [];
+      lessonsByPeriod[key].push([id, l]);
     });
 
     const cls = dayCls[day] || '';
 
     // Рядки по кожній парі
     const rows = PERIODS.map(period => {
-      const periodLessons = lessonsByTime[period.start] || [];
+      const periodLessons = lessonsByPeriod[period.start] || [];
       const isCurrent = new Date().getHours() * 60 + new Date().getMinutes() >= (() => { const [h,m] = period.start.split(':'); return +h*60+ +m; })()
         && new Date().getHours() * 60 + new Date().getMinutes() < (() => { const [h,m] = period.end.split(':'); return +h*60+ +m; })()
         && dayNamesUk[new Date().getDay()] === day;
