@@ -939,16 +939,18 @@ function dbUrl(path, token) {
 const db = {
   async get(path) {
     try {
-      const res = await fetch(dbUrl(path, _idToken));
-      if (res.status === 401) {
-        // Try without token (public read)
-        const res2 = await fetch(dbUrl(path, null));
-        if (res2.ok) return res2.json();
-        console.warn('Firebase 401: відкрий правила бази — ".read": true');
-        return null;
+      const res = await fetch(dbUrl(path, null));
+      if (res.ok) {
+        const data = await res.json();
+        console.log('db.get ok:', path, data);
+        return data;
       }
-      return res.ok ? res.json() : null;
-    } catch(e) { return null; }
+      console.warn('db.get fail:', path, res.status);
+      return null;
+    } catch(e) {
+      console.error('db.get error:', path, e);
+      return null;
+    }
   },
   async set(path, data) {
     const res = await fetch(dbUrl(path, _idToken), {
@@ -1077,6 +1079,7 @@ function getGroups() {
 // ── Оновлення UI залежно від ролі ─────────────────────
 function updateLayout() {
   const slug = getGroupFromURL();
+  console.log('updateLayout: isAdmin=', isAdmin, 'slug=', slug, 'lessons=', Object.keys(lessons).length, 'groups=', Object.keys(extraGroups));
   const groups = getGroups();
   const matched = slug ? getGroupBySlug(slug, groups) : null;
   // Студент: завжди синхронізуємо activeGroup зі slug
@@ -1178,6 +1181,7 @@ let _dataLoaded = false;
 function startDataListeners() {
   if (_dataLoaded) return;
   _dataLoaded = true;
+  console.log('startDataListeners: isAdmin=', isAdmin);
 
   db.on(settingsRef, (d) => {
     appSettings = d || {};
