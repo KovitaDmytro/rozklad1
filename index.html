@@ -117,7 +117,7 @@
   .glass-btn:active { transform: scale(0.97); }
   .glass-btn.logout { border-color: rgba(226,75,74,0.35); color: #c0392b; }
   .glass-btn.logout:hover { background: rgba(226,75,74,0.1); }
-  .login-btn { display: none; }
+  .login-btn { display: flex; }
   .logout-btn { display: none; }
 
   /* ── CONTENT ── */
@@ -310,21 +310,6 @@
 
   .time-col { min-width: 62px; font-size: 13px; font-weight: 700; color: var(--text-primary); line-height: 1.3; }
   .time-dur { font-size: 11px; color: var(--text-tertiary); font-weight: 500; }
-
-  /* Period num + time columns */
-  .period-num-col {
-    font-size: 11px; font-weight: 800; color: var(--text-tertiary);
-    min-width: 18px; text-align: center; letter-spacing: 0.02em;
-    flex-shrink: 0;
-  }
-  .period-time-col {
-    font-size: 12px; font-weight: 700; color: var(--text-primary);
-    white-space: nowrap; flex-shrink: 0; letter-spacing: -0.2px;
-    display: flex; align-items: center; gap: 2px;
-  }
-  .period-time-sep {
-    color: var(--text-tertiary); font-weight: 400; font-size: 11px; margin: 0 1px;
-  }
 
   .divider-line {
     width: 1.5px; height: 36px; border-radius: 2px;
@@ -781,16 +766,11 @@
 
   @media(max-width: 600px) {
     .content { padding: 12px 12px 40px; }
-    .lesson-row { gap: 6px; padding: 9px 10px; }
+    .lesson-row { gap: 7px; }
     .actions { width: 100%; justify-content: flex-end; margin-top: 4px; }
     .group-tabs { gap: 6px; }
     .group-tab { padding: 7px 14px; font-size: 12px; }
     .header { padding: 0 14px; }
-    .period-time-col { font-size: 11px; }
-    .subject-name { font-size: 13px; }
-    .subject-meta { font-size: 11px; }
-    .room-badge { font-size: 11px; padding: 3px 7px; }
-    .type-badge { font-size: 10px; padding: 3px 8px; }
   }
 </style>
 </head>
@@ -806,13 +786,13 @@
 <div class="header">
   <div style="display:flex;align-items:center;gap:10px">
     <div class="logo">
-      <div class="logo-icon" id="logoIcon"><i class="ti ti-calendar-event"></i></div>
+      <div class="logo-icon"><i class="ti ti-calendar-event"></i></div>
       Розклад
     </div>
     <span class="admin-badge" id="adminBadge"><i class="ti ti-shield-check"></i> Адмін</span>
   </div>
   <div class="header-actions">
-    <button class="glass-btn login-btn" id="loginBtn" onclick="openLogin()" style="display:none"><i class="ti ti-lock"></i> Вхід</button>
+    <button class="glass-btn login-btn" id="loginBtn" onclick="openLogin()"><i class="ti ti-lock"></i> Вхід</button>
     <button class="glass-btn" id="catalogBtn" onclick="openCatalog()" style="display:none"><i class="ti ti-books"></i> Каталог</button>
     <button class="glass-btn" id="groupsBtn" onclick="openGroupLinks()" style="display:none"><i class="ti ti-link"></i> Посилання</button>
     <button class="glass-btn" id="archiveBtn" onclick="openArchive()" style="display:none"><i class="ti ti-archive"></i> Архів</button>
@@ -842,7 +822,9 @@
     <div style="font-size:14px;color:var(--text-secondary);line-height:1.6">Зверніться до адміністратора,<br>щоб отримати посилання вашої групи.</div>
   </div>
 
-  <div class="info-bar" id="infoBar" style="display:none">
+  <div class="info-bar" id="infoBar">
+    <i class="ti ti-info-circle"></i> Перегляд відкритий для всіх — реєстрація не потрібна. Редагування лише для адміністратора.
+  </div>
   <div class="toolbar">
     <div class="filters">
       <button class="filter-btn active" onclick="filterDay('all',this)">Всі дні</button>
@@ -1066,23 +1048,10 @@ onValue(lessonsRef, (snap) => {
   updateLayout();
 });
 
-// Скорочує ПІБ до "Прізвище І. П."
-function shortenTeacher(full) {
-  if (!full) return '';
-  // Прибираємо посаду (ДОЦЕНТ, ПРОФ, etc.) якщо є
-  const withoutTitle = full.replace(/^(ДОЦЕНТ|ПРОФЕСОР|АСИСТЕНТ|ВИК\.?|СТАРШИЙ\s+ВИК\.?)\s*/i, '').trim();
-  const parts = withoutTitle.split(/\s+/);
-  if (parts.length === 1) return withoutTitle;
-  // Прізвище + ініціали
-  const last = parts[0];
-  const initials = parts.slice(1).map(p => p[0] ? p[0].toUpperCase() + '.' : '').join(' ');
-  return last + ' ' + initials;
-}
-
 onAuthStateChanged(auth, (user) => {
   isAdmin = !!user;
   document.getElementById('adminBadge').style.display  = isAdmin ? 'inline-flex' : 'none';
-  document.getElementById('loginBtn').style.display    = isAdmin ? 'none' : 'none'; // hidden; revealed by secret tap
+  document.getElementById('loginBtn').style.display    = isAdmin ? 'none' : 'flex';
   document.getElementById('logoutBtn').style.display   = isAdmin ? 'flex' : 'none';
   document.getElementById('addBtn').style.display      = isAdmin ? 'flex' : 'none';
   document.getElementById('catalogBtn').style.display  = isAdmin ? 'flex' : 'none';
@@ -1175,7 +1144,7 @@ function render() {
         return `
           <div class="lesson-row period-empty">
             <div class="period-num-col">${period.num}</div>
-            <div class="period-time-col">${period.start}<span class="period-time-sep">–</span>${period.end}</div>
+            <div class="period-time-col">${period.start}<span class="period-time-end">${period.end}</span></div>
             <div class="divider-line" style="opacity:.3"></div>
             <div class="subject-col" style="opacity:.35">
               <div class="subject-name" style="font-size:12px;font-weight:500;color:var(--text-tertiary)">— вільно —</div>
@@ -1197,11 +1166,11 @@ function render() {
         return `
           <div class="lesson-row${l.hidden ? ' is-hidden' : ''}${isCurrentLesson ? ' is-current' : ''}">
             <div class="period-num-col">${period.num}</div>
-            <div class="period-time-col">${period.start}<span class="period-time-sep">–</span>${period.end}</div>
+            <div class="period-time-col">${period.start}<span class="period-time-end">${period.end}</span></div>
             <div class="divider-line"></div>
             <div class="subject-col">
               <div class="subject-name">${l.subject}</div>
-              <div class="subject-meta"><i class="ti ti-user" style="font-size:11px"></i> ${shortenTeacher(l.teacher)} ${groupLabel}</div>
+              <div class="subject-meta"><i class="ti ti-user" style="font-size:11px"></i> ${l.teacher} ${groupLabel}</div>
             </div>
             ${nowBadge}
             <span class="type-badge type-${l.type}">${typeLabels[l.type] || l.type}</span>
@@ -1796,19 +1765,6 @@ window.doExport = async () => {
 
 // Auto-refresh highlighting every minute
 setInterval(() => { render(); }, 60000);
-
-// Secret tap on logo icon (5 taps) to reveal admin login
-let logoTapCount = 0, logoTapTimer = null;
-document.getElementById('logoIcon').addEventListener('click', () => {
-  logoTapCount++;
-  clearTimeout(logoTapTimer);
-  if (logoTapCount >= 5) {
-    document.getElementById('loginBtn').style.display = 'flex';
-    logoTapCount = 0;
-  } else {
-    logoTapTimer = setTimeout(() => { logoTapCount = 0; }, 1500);
-  }
-});
 function showToast(msg, type) {
   const t = document.getElementById('toast');
   document.getElementById('toastMsg').textContent = msg;
