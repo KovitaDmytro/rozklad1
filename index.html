@@ -895,6 +895,18 @@ const auth = {
     localStorage.setItem('_fbRefresh', data.refreshToken);
     _authCallbacks.forEach(cb => cb({ email }));
   },
+  async signInAnonymously() {
+    const res = await fetch(`${AUTH_URL}:signUp?key=${API_KEY}`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ returnSecureToken: true })
+    });
+    const data = await res.json();
+    if (data.idToken) {
+      _idToken = data.idToken;
+      _authCallbacks.forEach(cb => cb({ isAnonymous: true }));
+    }
+  },
   async signOut() {
     _idToken = null;
     localStorage.removeItem('_fbToken');
@@ -944,9 +956,6 @@ const db = {
         const data = await res.json();
         return data;
       }
-      // якщо з токеном не вийшло — спробувати без
-      const res2 = await fetch(dbUrl(path, null));
-      if (res2.ok) return await res2.json();
       return null;
     } catch(e) {
       return null;
@@ -983,13 +992,20 @@ const db = {
   },
   // Polling-based "real-time" listener
   on(path, cb) {
-    // Проста версія: одразу fetch, потім кожні 5с
-    const doFetch = async () => {
+    if (!_listeners[path]) _listeners[path] = { callbacks: [], last: null };
+    _listeners[path].callbacks.push(cb);
+    const poll = async () => {
       const data = await db.get(path);
-      cb(data);
+      const json = JSON.stringify(data);
+      if (json !== _listeners[path].last) {
+        _listeners[path].last = json;
+        _listeners[path].callbacks.forEach(fn => fn(data));
+      }
     };
-    doFetch();
-    setInterval(doFetch, 5000);
+    poll();
+    if (!_listeners[path].interval) {
+      _listeners[path].interval = setInterval(poll, 5000);
+    }
   }
 };
 
@@ -1039,25 +1055,10 @@ function getCurrentWeekNum() {
   return (weekIndex % 2) + 1; // 1 або 2
 }
 
-// Знаходить пару за часом початку — точний або найближчий збіг
+// Знаходить пару за часом початку (08:30 → 'І' тощо)
 function getPeriodByTime(time) {
   if (!time) return null;
-  // спочатку точний збіг
-  const exact = PERIODS.find(p => p.start === time);
-  if (exact) return exact;
-  // потім — найближча пара (в межах ±10 хв від початку)
-  const [h, m] = time.split(':').map(Number);
-  if (isNaN(h)) return null;
-  const mins = h * 60 + m;
-  return PERIODS.find(p => {
-    const [ph, pm] = p.start.split(':').map(Number);
-    return Math.abs(ph * 60 + pm - mins) <= 10;
-  }) || null;
-}
-
-// Повертає пару для відображення у сітці (для render)
-function getPeriodForLesson(time) {
-  return getPeriodByTime(time);
+  return PERIODS.find(p => p.start === time) || null;
 }
 
 // ── URL slug helpers ──────────────────────────────────
@@ -1087,8 +1088,13 @@ function getGroups() {
 // ── Оновлення UI залежно від ролі ─────────────────────
 function updateLayout() {
   const slug = getGroupFromURL();
+  const isAdminURL = new URLSearchParams(window.location.search).has('admin');
   const groups = getGroups();
   const matched = slug ? getGroupBySlug(slug, groups) : null;
+
+  // Якщо є ?group= — завжди студентський режим (навіть якщо адмін залогінений)
+  // Адмін-панель тільки на ?admin або без параметрів
+  const showAsAdmin = isAdmin;
 
   if (matched) activeGroup = matched;
 
@@ -1099,8 +1105,8 @@ function updateLayout() {
   const grid          = document.getElementById('daysGrid');
   const infoBar       = document.getElementById('infoBar');
 
-  if (isAdmin) {
-    // Адмін — завжди бачить розклад і таби груп
+  if (showAsAdmin) {
+    // Адмін — показуємо всі таби груп
     studentHeader.style.display = 'none';
     groupSection.style.display  = 'flex';
     noGroupScreen.style.display = 'none';
@@ -1110,21 +1116,20 @@ function updateLayout() {
     renderGroupTabs();
     render();
     document.title = 'Розклад — Адмін';
-  } else if (slug) {
-    // Студент з посиланням
-    const label = matched || slug;
-    activeGroup = matched || activeGroup;
-    document.getElementById('studentGroupName').textContent = label;
+  } else if (matched) {
+    // Студент із правильним посиланням
+    activeGroup = matched;
     studentHeader.style.display = 'flex';
+    document.getElementById('studentGroupName').textContent = matched;
     groupSection.style.display  = 'none';
     noGroupScreen.style.display = 'none';
     if (toolbar) toolbar.style.display = 'flex';
     if (grid) grid.style.display = '';
     infoBar.style.display = 'none';
     render();
-    document.title = 'Розклад — ' + label;
+    document.title = 'Розклад — ' + matched;
   } else {
-    // Немає ні авторизації ні ?group= — заглушка
+    // Немає параметра або невідомий slug — заглушка
     studentHeader.style.display = 'none';
     groupSection.style.display  = 'none';
     noGroupScreen.style.display = 'block';
@@ -1211,10 +1216,13 @@ function startDataListeners() {
 }
 
 auth.onAuthStateChanged((user) => {
-  isAdmin = !!user;
-  document.getElementById('adminBadge').style.display  = isAdmin ? 'inline-flex' : 'none';
-  // Кнопку "Вхід" показуємо тільки якщо немає ?group= (тобто це адмін-сторінка)
+  if (!user) {
+    auth.signInAnonymously();
+    return;
+  }
+  isAdmin = !user.isAnonymous;
   const hasGroup = new URLSearchParams(window.location.search).has('group');
+  document.getElementById('adminBadge').style.display  = isAdmin ? 'inline-flex' : 'none';
   document.getElementById('loginBtn').style.display    = isAdmin ? 'none' : (hasGroup ? 'none' : 'flex');
   document.getElementById('logoutBtn').style.display   = isAdmin ? 'flex' : 'none';
   document.getElementById('addBtn').style.display      = isAdmin ? 'flex' : 'none';
@@ -1223,7 +1231,7 @@ auth.onAuthStateChanged((user) => {
   document.getElementById('archiveBtn').style.display  = isAdmin ? 'flex' : 'none';
   startDataListeners();
   updateLayout();
-});
+});;
 
 // --- Current lesson detection ---
 const dayNamesUk = ['Неділя','Понеділок','Вівторок','Середа','Четвер','Пятниця','Субота'];
@@ -1287,20 +1295,18 @@ function render() {
       return parseInt(l.week) === currentWeek;
     });
 
-    // Будуємо map: пара.start → заняття (з fuzzy match)
-    const lessonsByPeriod = {};
+    // Будуємо map: час → заняття
+    const lessonsByTime = {};
     visibleEntries.forEach(([id, l]) => {
-      const p = getPeriodByTime(l.time);
-      const key = p ? p.start : l.time;
-      lessonsByPeriod[key] = lessonsByPeriod[key] || [];
-      lessonsByPeriod[key].push([id, l]);
+      lessonsByTime[l.time] = lessonsByTime[l.time] || [];
+      lessonsByTime[l.time].push([id, l]);
     });
 
     const cls = dayCls[day] || '';
 
     // Рядки по кожній парі
     const rows = PERIODS.map(period => {
-      const periodLessons = lessonsByPeriod[period.start] || [];
+      const periodLessons = lessonsByTime[period.start] || [];
       const isCurrent = new Date().getHours() * 60 + new Date().getMinutes() >= (() => { const [h,m] = period.start.split(':'); return +h*60+ +m; })()
         && new Date().getHours() * 60 + new Date().getMinutes() < (() => { const [h,m] = period.end.split(':'); return +h*60+ +m; })()
         && dayNamesUk[new Date().getDay()] === day;
