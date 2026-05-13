@@ -1376,13 +1376,14 @@ window.toggleInfo = (btn) => {
     wrap.style.display = 'block';
     btn.classList.add('active');
 
-    // Use rAF to get real rendered height
-    requestAnimationFrame(() => {
+    // Double rAF: first frame renders, second frame measures correctly
+    requestAnimationFrame(() => requestAnimationFrame(() => {
       const rect = btn.getBoundingClientRect();
       const popupW = 240;
-      const popupH = wrap.getBoundingClientRect().height || 160;
+      const popupH = wrap.getBoundingClientRect().height;
       const viewH = window.innerHeight;
       const viewW = window.innerWidth;
+      const GAP = 10;
 
       // Horizontal: align right edge to button, clamp to viewport
       let left = rect.right - popupW;
@@ -1390,14 +1391,25 @@ window.toggleInfo = (btn) => {
       if (left + popupW > viewW - 8) left = viewW - popupW - 8;
 
       // Vertical: prefer above button, fallback below
-      let top = rect.top - popupH - 8;
-      if (top < 8) top = rect.bottom + 8;
+      const spaceAbove = rect.top - GAP;
+      const spaceBelow = viewH - rect.bottom - GAP;
+      let top;
+      if (spaceAbove >= popupH) {
+        top = rect.top - popupH - GAP;
+      } else if (spaceBelow >= popupH) {
+        top = rect.bottom + GAP;
+      } else {
+        // not enough space either way — pick the bigger side
+        top = spaceAbove >= spaceBelow
+          ? Math.max(8, rect.top - popupH - GAP)
+          : rect.bottom + GAP;
+      }
 
       wrap.style.left = left + 'px';
       wrap.style.top = top + 'px';
       wrap.style.right = 'auto';
       wrap.style.visibility = 'visible';
-    });
+    }));
   }
 };
 
