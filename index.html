@@ -1365,9 +1365,13 @@ function formHTML(id, l) {
       '<div class="field"><label>День тижня</label><select id="fDay">' + dayOpts + '</select></div>' +
       '<div class="field"><label>Тип заняття</label><select id="fType">' + typeOpts + '</select></div>' +
     '</div>' +
-    '<div class="field-row">' +
-      '<div class="field"><label>Час початку</label><input id="fTime" type="time" value="' + (l ? l.time : '08:00') + '"></div>' +
-      '<div class="field"><label>Тривалість</label><input id="fDur" value="' + (l ? l.dur : '1:20') + '" placeholder="1:20"></div>' +
+    '<div class="field"><label>Пара (час заняття)</label>' +
+      '<select id="fPeriod">' +
+        PERIODS.map((p, i) => {
+          const selected = l && l.time === p.start ? ' selected' : (!l && i === 0 ? ' selected' : '');
+          return `<option value="${p.start}"${selected}>${p.num} пара — ${p.start}–${p.end}</option>`;
+        }).join('') +
+      '</select>' +
     '</div>' +
     '<div class="field-row">' +
       '<div class="field"><label>Аудиторія</label><input id="fRoom" value="' + (l ? l.room : '') + '" placeholder="А-201"></div>' +
@@ -1425,20 +1429,59 @@ function initGroupChecks() {
 window.saveLesson = async (id) => {
   const s = document.getElementById('fSubject').value.trim();
   if (!s) { alert('Введіть назву предмету'); return; }
+
+  const teacher = document.getElementById('fTeacher').value.trim();
+  const day = document.getElementById('fDay').value;
+  const time = document.getElementById('fPeriod').value;
+  const week = document.querySelector('input[name=fWeek]:checked')?.value || 'all';
+
+  // Calculate duration from PERIODS
+  const period = PERIODS.find(p => p.start === time);
+  const dur = period ? (() => {
+    const [sh, sm] = period.start.split(':').map(Number);
+    const [eh, em] = period.end.split(':').map(Number);
+    const mins = (eh * 60 + em) - (sh * 60 + sm);
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return h + ':' + String(m).padStart(2, '0');
+  })() : '1:20';
+
   const checkboxes = document.querySelectorAll('#fGroupChecks input[type=checkbox]');
   const group = [...checkboxes].filter(c => c.checked && c.value).map(c => c.value);
-  // [] means shared (all groups)
+
+  // ── Перевірка конфлікту викладача ──
+  if (teacher) {
+    const conflict = Object.entries(lessons).find(([lid, l]) => {
+      if (lid === id) return false; // пропускаємо себе при редагуванні
+      if (l.archived || l.hidden) return false;
+      if (l.teacher !== teacher) return false;
+      if (l.day !== day) return false;
+      if (l.time !== time) return false;
+      // Перевіряємо тиждень: конфлікт лише якщо тижні перекриваються
+      const thisWeek = week;
+      const otherWeek = l.week || 'all';
+      if (thisWeek !== 'all' && otherWeek !== 'all' && thisWeek !== otherWeek) return false;
+      return true;
+    });
+    if (conflict) {
+      const cl = conflict[1];
+      const periodLabel = PERIODS.find(p => p.start === time);
+      alert(`⚠️ Конфлікт! Викладач "${teacher}" вже веде заняття "${cl.subject}" у ${day} на ${periodLabel ? periodLabel.num + ' парі' : time}.\n\nВикладач не може мати два заняття одночасно.`);
+      return;
+    }
+  }
+
   const obj = {
     subject: s,
-    teacher: document.getElementById('fTeacher').value.trim(),
-    day: document.getElementById('fDay').value,
+    teacher,
+    day,
     type: document.getElementById('fType').value,
-    time: document.getElementById('fTime').value,
-    dur: document.getElementById('fDur').value.trim() || '1:20',
+    time,
+    dur,
     room: document.getElementById('fRoom').value.trim(),
-    group: group,
+    group,
     zoom: document.getElementById('fZoom').value.trim(),
-    week: document.querySelector('input[name=fWeek]:checked')?.value || 'all'
+    week
   };
   if (id) {
     await update(ref(db, 'lessons/' + id), obj);
