@@ -325,6 +325,16 @@
   .period-time-sep {
     color: var(--text-tertiary); font-weight: 400; font-size: 11px; margin: 0 1px;
   }
+  .lesson-row.period-empty {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.25);
+    box-shadow: none;
+    padding: 7px 13px;
+  }
+  .lesson-row.period-empty:hover {
+    transform: none;
+    background: rgba(255,255,255,0.12);
+  }
 
   .divider-line {
     width: 1.5px; height: 36px; border-radius: 2px;
@@ -1080,9 +1090,8 @@ function updateLayout() {
   const groups = getGroups();
   const matched = slug ? getGroupBySlug(slug, groups) : null;
 
-  // Якщо є ?group= — завжди студентський режим (навіть якщо адмін залогінений)
-  // Адмін-панель тільки на ?admin або без параметрів
-  const showAsAdmin = isAdmin && !slug;
+  // Адмін завжди бачить розклад (незалежно від URL)
+  const showAsAdmin = isAdmin;
 
   if (matched) activeGroup = matched;
 
@@ -1344,13 +1353,42 @@ function render() {
       }).join('');
     }).join('');
 
+    // Заняття зі старим/нестандартним часом (не входять у жодну пару) — показуємо окремо
+    const knownStarts = new Set(PERIODS.map(p => p.start));
+    const orphanLessons = visibleEntries.filter(([, l]) => !knownStarts.has(l.time));
+    const orphanRows = orphanLessons.map(([id, l]) => {
+      const groupArr2 = Array.isArray(l.group) ? l.group : (l.group ? [l.group] : []);
+      const groupLabel = groupArr2.length ? `<span class="group-badge-lesson"><i class="ti ti-users" style="font-size:9px"></i> ${groupArr2.join(', ')}</span>` : '';
+      const isCurrentLesson = currentIds.has(id);
+      const nowBadge = isCurrentLesson ? '<span class="now-badge"><i class="ti ti-broadcast" style="font-size:10px"></i> ЗАРАЗ</span>' : '';
+      return `
+        <div class="lesson-row${l.hidden ? ' is-hidden' : ''}${isCurrentLesson ? ' is-current' : ''}">
+          <div class="period-num-col">?</div>
+          <div class="period-time-col">${l.time || '—'}<span class="period-time-sep"></span></div>
+          <div class="divider-line"></div>
+          <div class="subject-col">
+            <div class="subject-name">${l.subject}</div>
+            <div class="subject-meta"><i class="ti ti-user" style="font-size:11px"></i> ${shortenTeacher(l.teacher)} ${groupLabel}</div>
+          </div>
+          ${nowBadge}
+          <span class="type-badge type-${l.type}">${typeLabels[l.type] || l.type}</span>
+          ${l.week && l.week !== 'all' ? `<span class="week-badge w${l.week}">${l.week}-й тижд.</span>` : ''}
+          <span class="room-badge"><i class="ti ti-door" style="font-size:13px"></i>${l.room}</span>
+          ${isAdmin ? `<div class="actions">
+            <button class="btn-hide ${l.hidden ? 'active' : ''}" onclick="toggleHide('${id}')"><i class="ti ti-eye${l.hidden ? '' : '-off'}"></i></button>
+            <button class="btn-edit" onclick="openEdit('${id}')"><i class="ti ti-edit"></i></button>
+            <button class="btn-del" onclick="confirmDelete('${id}')"><i class="ti ti-trash"></i></button>
+          </div>` : ''}
+        </div>`;
+    }).join('');
+
     const totalVisible = visibleEntries.length;
     return `<div class="day-block ${cls}" style="animation-delay:${idx * 0.05}s">
       <div class="day-header">
         <span class="day-name">${day}</span>
         <span class="day-count">${totalVisible} занять</span>
       </div>
-      <div class="lessons">${rows}</div>
+      <div class="lessons">${rows}${orphanRows}</div>
     </div>`;
   }).join('');
 }
@@ -1382,8 +1420,18 @@ function formHTML(id, l) {
       '<div class="field"><label>Тип заняття</label><select id="fType">' + typeOpts + '</select></div>' +
     '</div>' +
     '<div class="field-row">' +
-      '<div class="field"><label>Час початку</label><input id="fTime" type="time" value="' + (l ? l.time : '08:00') + '"></div>' +
-      '<div class="field"><label>Тривалість</label><input id="fDur" value="' + (l ? l.dur : '1:20') + '" placeholder="1:20"></div>' +
+      '<div class="field"><label>Пара</label><select id="fTime">' +
+        [
+          { num: 'І',   start: '08:30', end: '09:50' },
+          { num: 'ІІ',  start: '10:00', end: '11:20' },
+          { num: 'ІІІ', start: '11:40', end: '13:00' },
+          { num: 'ІV',  start: '13:10', end: '14:30' },
+          { num: 'V',   start: '14:40', end: '16:00' },
+          { num: 'VІ',  start: '16:10', end: '17:30' },
+          { num: 'VІІ', start: '17:40', end: '19:00' },
+        ].map(p => '<option value="' + p.start + '"' + (l && l.time === p.start ? ' selected' : (!l && p.start === '08:30' ? ' selected' : '')) + '>' + p.num + ' пара (' + p.start + '–' + p.end + ')</option>').join('') +
+      '</select></div>' +
+      '<div class="field" style="display:none"><input id="fDur" value="' + (l ? l.dur : '1:20') + '"></div>' +
     '</div>' +
     '<div class="field-row">' +
       '<div class="field"><label>Аудиторія</label><input id="fRoom" value="' + (l ? l.room : '') + '" placeholder="А-201"></div>' +
