@@ -782,12 +782,21 @@
     min-width: 220px; max-width: 270px;
   }
   .info-popup {
-    background: #fff;
-    border: 1px solid rgba(0,0,0,0.10);
+    background: #ffffff;
+    border: 1.5px solid rgba(0,0,0,0.13);
     border-radius: 16px;
     padding: 14px 16px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.14);
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.9),
+      0 4px 6px rgba(0,0,0,0.07),
+      0 12px 32px rgba(0,0,0,0.22),
+      0 24px 48px rgba(0,0,0,0.12);
     display: flex; flex-direction: column; gap: 8px;
+    animation: popupIn 0.18s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  @keyframes popupIn {
+    from { opacity: 0; transform: scale(0.92) translateY(4px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
   }
   .info-full-name {
     font-size: 14px; font-weight: 700; color: var(--text-primary);
@@ -1344,28 +1353,33 @@ window.toggleInfo = (btn) => {
   document.querySelectorAll('.btn-info.active').forEach(b => b.classList.remove('active'));
 
   if (!isOpen) {
+    // Show offscreen first to measure real height
+    wrap.style.visibility = 'hidden';
     wrap.style.display = 'block';
     btn.classList.add('active');
 
-    // Position with fixed coords so it's never clipped
-    const rect = btn.getBoundingClientRect();
-    const popupW = 240;
-    const popupH = wrap.getBoundingClientRect().height || 160;
-    const viewH = window.innerHeight;
-    const viewW = window.innerWidth;
+    // Use rAF to get real rendered height
+    requestAnimationFrame(() => {
+      const rect = btn.getBoundingClientRect();
+      const popupW = 240;
+      const popupH = wrap.getBoundingClientRect().height || 160;
+      const viewH = window.innerHeight;
+      const viewW = window.innerWidth;
 
-    // Horizontal: align right edge to button, clamp to viewport
-    let left = rect.right - popupW;
-    if (left < 8) left = 8;
-    if (left + popupW > viewW - 8) left = viewW - popupW - 8;
+      // Horizontal: align right edge to button, clamp to viewport
+      let left = rect.right - popupW;
+      if (left < 8) left = 8;
+      if (left + popupW > viewW - 8) left = viewW - popupW - 8;
 
-    // Vertical: prefer above button, fallback below
-    let top = rect.top - popupH - 8;
-    if (top < 8) top = rect.bottom + 8;
+      // Vertical: prefer above button, fallback below
+      let top = rect.top - popupH - 8;
+      if (top < 8) top = rect.bottom + 8;
 
-    wrap.style.left = left + 'px';
-    wrap.style.top = top + 'px';
-    wrap.style.right = 'auto';
+      wrap.style.left = left + 'px';
+      wrap.style.top = top + 'px';
+      wrap.style.right = 'auto';
+      wrap.style.visibility = 'visible';
+    });
   }
 };
 
