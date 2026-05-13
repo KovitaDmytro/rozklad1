@@ -942,13 +942,10 @@ const db = {
       const res = await fetch(dbUrl(path, null));
       if (res.ok) {
         const data = await res.json();
-        console.log('db.get ok:', path, data);
         return data;
       }
-      console.warn('db.get fail:', path, res.status);
       return null;
     } catch(e) {
-      console.error('db.get error:', path, e);
       return null;
     }
   },
@@ -1079,11 +1076,15 @@ function getGroups() {
 // ── Оновлення UI залежно від ролі ─────────────────────
 function updateLayout() {
   const slug = getGroupFromURL();
-  console.log('updateLayout: isAdmin=', isAdmin, 'slug=', slug, 'lessons=', Object.keys(lessons).length, 'groups=', Object.keys(extraGroups));
+  const isAdminURL = new URLSearchParams(window.location.search).has('admin');
   const groups = getGroups();
   const matched = slug ? getGroupBySlug(slug, groups) : null;
-  // Студент: завжди синхронізуємо activeGroup зі slug
-  if (!isAdmin && matched) activeGroup = matched;
+
+  // Якщо є ?group= — завжди студентський режим (навіть якщо адмін залогінений)
+  // Адмін-панель тільки на ?admin або без параметрів
+  const showAsAdmin = isAdmin && !slug;
+
+  if (matched) activeGroup = matched;
 
   const studentHeader = document.getElementById('studentGroupHeader');
   const groupSection  = document.getElementById('groupSection');
@@ -1092,7 +1093,7 @@ function updateLayout() {
   const grid          = document.getElementById('daysGrid');
   const infoBar       = document.getElementById('infoBar');
 
-  if (isAdmin) {
+  if (showAsAdmin) {
     // Адмін — показуємо всі таби груп
     studentHeader.style.display = 'none';
     groupSection.style.display  = 'flex';
@@ -1114,7 +1115,7 @@ function updateLayout() {
     if (grid) grid.style.display = '';
     infoBar.style.display = 'none';
     render();
-    document.title = `Розклад — ${matched}`;
+    document.title = 'Розклад — ' + matched;
   } else {
     // Немає параметра або невідомий slug — заглушка
     studentHeader.style.display = 'none';
@@ -1181,7 +1182,6 @@ let _dataLoaded = false;
 function startDataListeners() {
   if (_dataLoaded) return;
   _dataLoaded = true;
-  console.log('startDataListeners: isAdmin=', isAdmin);
 
   db.on(settingsRef, (d) => {
     appSettings = d || {};
@@ -1254,12 +1254,11 @@ function render() {
 
   const allEntries = Object.entries(lessons);
   const currentIds = getCurrentLesson(allEntries);
-
   grid.innerHTML = filtered.map((day, idx) => {
     let entries = Object.entries(lessons).filter(([, l]) => l.day === day);
 
-    // Фільтр по групі
-    if (activeGroup !== 'all') {
+    // Фільтр по групі — 'all' показує всі
+    if (activeGroup && activeGroup !== 'all') {
       entries = entries.filter(([, l]) => {
         const g = Array.isArray(l.group) ? l.group : (l.group ? [l.group] : []);
         return g.length === 0 || g.includes(activeGroup);
