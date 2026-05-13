@@ -780,71 +780,129 @@
     display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
   }
 
+
   @media(max-width: 600px) {
     .content { padding: 12px 10px 40px; }
     .header { padding: 0 12px; }
     .group-tabs { gap: 6px; }
     .group-tab { padding: 7px 14px; font-size: 12px; }
 
-    /* Compact lesson row on mobile */
-    .lesson-row { gap: 6px; padding: 9px 10px; flex-wrap: nowrap; align-items: center; }
-    .period-num-col { min-width: 16px; font-size: 10px; }
-    .period-time-col { min-width: 38px; font-size: 11px; }
+    /* ── Lesson row: два шари — верхній рядок + розгорнуті деталі ── */
+    .lesson-row {
+      flex-wrap: wrap;
+      gap: 0;
+      padding: 10px 10px;
+      align-items: center;
+      row-gap: 0;
+    }
+
+    /* Верхній рядок — всі inline-елементи */
+    .period-num-col {
+      min-width: 14px;
+      font-size: 10px;
+      flex-shrink: 0;
+      align-self: center;
+    }
+    .period-time-col {
+      min-width: 36px;
+      font-size: 11px;
+      flex-shrink: 0;
+      margin-left: 4px;
+      align-self: center;
+    }
     .period-time-end { font-size: 9px; }
-    .divider-line { height: 28px; }
-    .subject-col { flex: 1; min-width: 0; }
-    .subject-name { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .divider-line { height: 26px; margin: 0 4px; flex-shrink: 0; align-self: center; }
+
+    /* Subject — займає залишок першого рядка */
+    .subject-col {
+      flex: 1;
+      min-width: 0;
+      align-self: center;
+    }
+    .subject-name {
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    /* Мета (викладач) — завжди прихована на мобільному в collapsed */
     .subject-meta { display: none; }
 
-    /* Hide details on mobile by default */
-    .lesson-details { display: none; }
-    .lesson-row.info-open .lesson-details { display: flex; flex-wrap: wrap; gap: 5px; width: 100%; margin-top: 6px; }
-    .lesson-row.info-open { flex-wrap: wrap; }
-    .lesson-row.info-open .subject-name { white-space: normal; overflow: visible; text-overflow: unset; }
-    .lesson-row.info-open .subject-meta { display: flex; }
+    /* nowBadge — в рядку після subject */
+    .now-badge { flex-shrink: 0; font-size: 9px; padding: 2px 7px; align-self: center; }
 
-    /* Show info button on mobile */
-    .btn-info { display: flex; }
+    /* lesson-details — завжди в останньому рядку через order */
+    .lesson-details {
+      display: none;
+      order: 20;
+    }
 
-    /* Admin actions on mobile — show as compact icon-only buttons inline, always visible */
+    /* Адмін-кнопки — компактні іконки, в першому рядку */
     .actions {
       display: flex;
-      gap: 4px;
+      gap: 3px;
       flex-shrink: 0;
+      align-self: center;
+      margin-left: 4px;
     }
     .actions .btn-edit,
     .actions .btn-del,
-    .actions .btn-dup,
-    .actions .btn-hide,
-    .actions .btn-archive {
-      padding: 7px;
-      border-radius: 10px;
-      min-width: 32px;
-      min-height: 32px;
+    .actions .btn-hide {
+      display: flex;
+      padding: 6px;
+      border-radius: 9px;
+      min-width: 30px;
+      min-height: 30px;
       justify-content: center;
-      font-size: 0; /* hide text */
+      align-items: center;
+      font-size: 0;
     }
     .actions .btn-edit i,
     .actions .btn-del i,
-    .actions .btn-dup i,
-    .actions .btn-hide i,
-    .actions .btn-archive i {
-      font-size: 15px;
-      margin: 0;
-    }
-    /* On mobile with admin, hide dup+archive to save space — show only hide/edit/del */
-    .actions .btn-dup { display: none; }
+    .actions .btn-hide i { font-size: 14px; margin: 0; }
+    /* Dup і archive — приховані в collapsed */
+    .actions .btn-dup,
     .actions .btn-archive { display: none; }
-    /* When row is open (info-open), show all buttons as a full row */
-    .lesson-row.info-open .actions {
-      width: 100%;
-      justify-content: flex-end;
-      margin-top: 2px;
+
+    /* Кнопка і — остання в першому рядку */
+    .btn-info {
+      display: flex;
+      align-self: center;
+      flex-shrink: 0;
+      margin-left: 4px;
+      width: 30px;
+      height: 30px;
+      font-size: 14px;
     }
-    .lesson-row.info-open .actions .btn-dup { display: flex; }
+
+    /* ── Розгорнутий стан (info-open) ── */
+    .lesson-row.info-open {
+      row-gap: 8px;
+    }
+    /* Subject розгортається */
+    .lesson-row.info-open .subject-name {
+      white-space: normal;
+      overflow: visible;
+      text-overflow: unset;
+    }
+    .lesson-row.info-open .subject-meta { display: flex; }
+
+    /* Деталі — з'являються як окремий рядок на всю ширину */
+    .lesson-row.info-open .lesson-details {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      width: 100%;
+      order: 10;
+    }
+
+    /* Dup і archive — з'являються при розкритті */
+    .lesson-row.info-open .actions .btn-dup,
     .lesson-row.info-open .actions .btn-archive { display: flex; }
-    /* Info button — завжди після actions */
-    .btn-info { order: 99; }
+
+    /* Вирівнювання actions і btn-info при розкритті — лишаються в першому рядку */
+    .lesson-row.info-open .actions { align-self: flex-start; }
+    .lesson-row.info-open .btn-info { align-self: flex-start; }
   }
 </style>
 </head>
