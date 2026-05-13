@@ -1512,6 +1512,47 @@ window.saveLesson = async (id) => {
     }
   }
 
+  // ── Перевірка конфлікту групи ──
+  // Конфлікт = та сама група (або спільне заняття), той самий день, та сама пара, тижні перекриваються
+  {
+    const weeksOverlap = (w1, w2) => {
+      if (!w1 || w1 === 'all' || !w2 || w2 === 'all') return true;
+      return w1 === w2;
+    };
+
+    // "shared" lesson = group array is empty (for all groups)
+    const newIsShared = group.length === 0;
+
+    const groupConflict = Object.entries(lessons).find(([lid, l]) => {
+      if (lid === id) return false;       // editing same lesson
+      if (l.archived || l.hidden) return false;
+      if (l.day !== day || l.time !== time) return false;
+      if (!weeksOverlap(week, l.week || 'all')) return false;
+
+      const existingGroups = Array.isArray(l.group) ? l.group : (l.group ? [l.group] : []);
+      const existingIsShared = existingGroups.length === 0;
+
+      // shared vs shared → conflict
+      if (newIsShared && existingIsShared) return true;
+      // shared vs specific → conflict (shared affects all groups)
+      if (newIsShared && !existingIsShared) return true;
+      // specific vs shared → conflict
+      if (!newIsShared && existingIsShared) return true;
+      // specific vs specific → conflict only if groups intersect
+      return group.some(g => existingGroups.includes(g));
+    });
+
+    if (groupConflict) {
+      const cl = groupConflict[1];
+      const periodLabel = PERIODS.find(p => p.start === time);
+      const clGroups = Array.isArray(cl.group) ? cl.group : (cl.group ? [cl.group] : []);
+      const clGroupStr = clGroups.length ? clGroups.join(', ') : 'всі групи';
+      const newGroupStr = group.length ? group.join(', ') : 'всі групи';
+      alert(`⚠️ Конфлікт у розкладі групи!\n\nГрупа «${newGroupStr}» вже має заняття у цей час:\n"${cl.subject}" — ${clGroupStr}\n${cl.day}, ${periodLabel ? periodLabel.num + ' пара (' + time + ')' : time}\n\nОдна група не може мати два заняття одночасно.`);
+      return;
+    }
+  }
+
   const short = document.getElementById('fShort').value.trim();
   const obj = {
     subject: s,
