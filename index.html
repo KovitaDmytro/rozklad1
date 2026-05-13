@@ -938,15 +938,25 @@ function dbUrl(path, token) {
 
 const db = {
   async get(path) {
-    const res = await fetch(dbUrl(path, _idToken));
-    return res.ok ? res.json() : null;
+    try {
+      const res = await fetch(dbUrl(path, _idToken));
+      if (res.status === 401) {
+        // Try without token (public read)
+        const res2 = await fetch(dbUrl(path, null));
+        if (res2.ok) return res2.json();
+        console.warn('Firebase 401: відкрий правила бази — ".read": true');
+        return null;
+      }
+      return res.ok ? res.json() : null;
+    } catch(e) { return null; }
   },
   async set(path, data) {
-    await fetch(dbUrl(path, _idToken), {
+    const res = await fetch(dbUrl(path, _idToken), {
       method: 'PUT',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify(data)
     });
+    if (!res.ok) showToast('❌ Помилка запису (немає доступу)', 'red');
   },
   async push(path, data) {
     const res = await fetch(dbUrl(path, _idToken), {
@@ -954,23 +964,25 @@ const db = {
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify(data)
     });
-    return res.json(); // { name: "-Nxxx" }
+    if (!res.ok) { showToast('❌ Помилка запису (немає доступу)', 'red'); return {}; }
+    return res.json();
   },
   async update(path, data) {
-    await fetch(dbUrl(path, _idToken), {
+    const res = await fetch(dbUrl(path, _idToken), {
       method: 'PATCH',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify(data)
     });
+    if (!res.ok) showToast('❌ Помилка запису (немає доступу)', 'red');
   },
   async remove(path) {
-    await fetch(dbUrl(path, _idToken), { method: 'DELETE' });
+    const res = await fetch(dbUrl(path, _idToken), { method: 'DELETE' });
+    if (!res.ok) showToast('❌ Помилка видалення (немає доступу)', 'red');
   },
   // Polling-based "real-time" listener
   on(path, cb) {
     if (!_listeners[path]) _listeners[path] = { callbacks: [], last: null };
     _listeners[path].callbacks.push(cb);
-    // Fetch immediately
     const poll = async () => {
       const data = await db.get(path);
       const json = JSON.stringify(data);
