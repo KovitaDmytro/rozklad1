@@ -522,6 +522,14 @@
   .catalog-item-info { flex: 1; min-width: 0; }
   .catalog-item-name { font-size: 13px; font-weight: 700; color: var(--text-primary); }
   .catalog-item-sub { font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
+  .btn-cat-edit {
+    padding: 6px 10px; border-radius: 8px;
+    border: 1px solid rgba(29,158,117,0.3);
+    background: rgba(29,158,117,0.08);
+    cursor: pointer; font-size: 13px; color: #085041;
+    transition: all 0.15s;
+  }
+  .btn-cat-edit:hover { background: rgba(29,158,117,0.2); }
   .btn-cat-del {
     padding: 5px 10px; border-radius: 8px; border: 1px solid rgba(220,80,80,0.3);
     background: rgba(255,230,230,0.5); color: #891; cursor: pointer; font-size: 12px;
@@ -1324,15 +1332,29 @@ function renderCatalogModal() {
     const groups = getGroups();
     listHTML = groups.length
       ? groups.map(g => `
-          <div class="catalog-item">
-            <div class="catalog-item-info">
-              <div class="catalog-item-name"><i class="ti ti-users" style="font-size:12px;opacity:.6"></i> ${g.name} <span style="font-size:10px;font-weight:600;color:var(--text-tertiary);background:rgba(0,0,0,0.06);padding:1px 6px;border-radius:100px">#${g.id}</span></div>
+          <div class="catalog-item" id="gitem-${g.id}">
+            <div class="catalog-item-info" style="flex:1">
+              <div class="catalog-item-name" id="gname-${g.id}">
+                <i class="ti ti-users" style="font-size:12px;opacity:.6"></i>
+                <span class="gname-text">${g.name}</span>
+                <span style="font-size:10px;font-weight:600;color:var(--text-tertiary);background:rgba(0,0,0,0.06);padding:1px 6px;border-radius:100px;margin-left:4px">#${g.id}</span>
+              </div>
+              <div class="gname-edit" id="gedit-${g.id}" style="display:none;display-flex;align-items:center;gap:6px;margin-top:4px">
+                <input id="ginput-${g.id}" value="${g.name}" maxlength="30"
+                  style="padding:5px 10px;border-radius:10px;border:1px solid rgba(29,158,117,0.4);background:rgba(255,255,255,0.6);font-size:13px;font-weight:600;font-family:inherit;outline:none;width:160px"
+                  onkeydown="if(event.key==='Enter')saveGroupName('${g.id}','${g.name}');if(event.key==='Escape')cancelGroupEdit('${g.id}','${g.name}')" />
+                <button onclick="saveGroupName('${g.id}','${g.name}')" style="padding:5px 10px;border-radius:100px;border:none;background:linear-gradient(135deg,#1D9E75,#0F6E56);color:white;font-size:12px;font-weight:700;cursor:pointer"><i class="ti ti-check"></i></button>
+                <button onclick="cancelGroupEdit('${g.id}','${g.name}')" style="padding:5px 10px;border-radius:100px;border:1px solid rgba(0,0,0,0.1);background:rgba(0,0,0,0.05);color:#666;font-size:12px;font-weight:700;cursor:pointer"><i class="ti ti-x"></i></button>
+              </div>
             </div>
-            <button class="btn-cat-del" onclick="deleteGroup('${g.name}')"><i class="ti ti-trash"></i></button>
+            <div style="display:flex;gap:6px;flex-shrink:0">
+              <button class="btn-cat-edit" onclick="startGroupEdit('${g.id}','${g.name}')"><i class="ti ti-pencil"></i></button>
+              <button class="btn-cat-del" onclick="deleteGroup('${g.name}')"><i class="ti ti-trash"></i></button>
+            </div>
           </div>`).join('')
       : '<div class="archive-empty"><i class="ti ti-users" style="font-size:28px;display:block;margin-bottom:8px;opacity:.3"></i>Груп немає</div>';
     addRow = `<div class="catalog-add-row">
-        <input id="catName" placeholder="Назва групи (напр. ІПЗ-23-1)" maxlength="30" />
+        <input id="catName" placeholder="Назва групи (напр. ІПЗ-23-1)" maxlength="30" onkeydown="if(event.key==='Enter')addGroupFromCatalog()" />
         <button class="btn-cat-add" onclick="addGroupFromCatalog()"><i class="ti ti-plus"></i> Додати</button>
       </div>`;
   } else {
@@ -1414,6 +1436,58 @@ window.deleteGroup = async (name) => {
   });
   if (Object.keys(updates).length) await update(ref(db), updates);
   showToast('🗑 Групу видалено', 'red');
+  renderCatalogModal();
+  renderGroupTabs();
+};
+
+window.startGroupEdit = (id, name) => {
+  // Show input, hide text
+  const nameEl = document.getElementById('gname-' + id);
+  const editEl = document.getElementById('gedit-' + id);
+  if (!nameEl || !editEl) return;
+  nameEl.querySelector('.gname-text').style.display = 'none';
+  nameEl.querySelector('span:last-child').style.display = 'none';
+  editEl.style.display = 'flex';
+  const inp = document.getElementById('ginput-' + id);
+  if (inp) { inp.focus(); inp.select(); }
+};
+
+window.cancelGroupEdit = (id, name) => {
+  const nameEl = document.getElementById('gname-' + id);
+  const editEl = document.getElementById('gedit-' + id);
+  if (!nameEl || !editEl) return;
+  nameEl.querySelector('.gname-text').style.display = '';
+  nameEl.querySelector('span:last-child').style.display = '';
+  editEl.style.display = 'none';
+};
+
+window.saveGroupName = async (id, oldName) => {
+  const inp = document.getElementById('ginput-' + id);
+  if (!inp) return;
+  const newName = inp.value.trim();
+  if (!newName) { inp.focus(); return; }
+  if (newName === oldName) { cancelGroupEdit(id, oldName); return; }
+  if (getGroups().some(g => g.name === newName)) { alert('Група «' + newName + '» вже існує'); inp.focus(); return; }
+
+  // Знайти Firebase-ключ за id
+  const entry = Object.entries(extraGroups).find(([, g]) => (typeof g === 'object' ? g.id : '') === id);
+  if (!entry) return;
+  const fbKey = entry[0];
+
+  // Оновити назву групи в Firebase
+  await update(ref(db, 'groups/' + fbKey), { name: newName });
+
+  // Оновити назву в усіх заняттях
+  const updates = {};
+  Object.entries(lessons).forEach(([lid, l]) => {
+    const gs = Array.isArray(l.group) ? l.group : (l.group ? [l.group] : []);
+    if (gs.includes(oldName)) {
+      updates['lessons/' + lid + '/group'] = gs.map(x => x === oldName ? newName : x);
+    }
+  });
+  if (Object.keys(updates).length) await update(ref(db), updates);
+
+  showToast('✅ Групу перейменовано', 'green');
   renderCatalogModal();
   renderGroupTabs();
 };
