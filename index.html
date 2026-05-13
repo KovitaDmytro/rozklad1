@@ -363,7 +363,67 @@
     font-weight: 600;
   }
 
-  .actions { display: flex; gap: 6px; flex-shrink: 0; }
+  /* ── ADMIN ROW ── */
+  .admin-row { flex-wrap: nowrap; align-items: center; gap: 8px; padding: 9px 12px; }
+  .admin-row .subject-col { min-width: 0; flex: 1; }
+  .admin-row .subject-name { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+  .admin-row .subject-meta { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .admin-meta {
+    display: flex; align-items: center; gap: 5px; flex-shrink: 0; flex-wrap: nowrap;
+  }
+  .room-badge-sm {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 11px; font-weight: 600; color: var(--text-secondary);
+    background: rgba(255,255,255,0.45); border: 1px solid rgba(255,255,255,0.6);
+    padding: 3px 7px; border-radius: 7px; white-space: nowrap;
+  }
+  .group-count-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 10px; font-weight: 700; padding: 3px 7px; border-radius: 100px;
+    background: rgba(29,158,117,0.1); color: #0a5c43;
+    border: 1px solid rgba(29,158,117,0.22); white-space: nowrap; max-width: 140px;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .shared-badge { background: rgba(40,50,70,0.07); color: #29323c; border-color: rgba(40,50,70,0.15); }
+  .zoom-dot {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 6px;
+    background: linear-gradient(135deg, #2D8CFF, #1a6fd4);
+    flex-shrink: 0;
+  }
+  .hidden-dot {
+    display: inline-flex; align-items: center; justify-content: center;
+    color: #888; font-size: 12px; opacity: 0.7;
+  }
+
+  /* Admin action buttons — icon-only, compact */
+  .admin-actions {
+    display: flex; gap: 3px; flex-shrink: 0; align-items: center;
+    opacity: 0; transition: opacity 0.15s;
+  }
+  .admin-row:hover .admin-actions { opacity: 1; }
+  .adm-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 8px;
+    border: 1px solid transparent; background: transparent;
+    cursor: pointer; font-size: 14px; transition: all 0.15s;
+    color: var(--text-secondary);
+  }
+  .adm-btn:hover { background: rgba(255,255,255,0.6); border-color: rgba(0,0,0,0.08); color: var(--text-primary); }
+  .adm-edit:hover { color: #0C447C; background: rgba(214,231,251,0.6); }
+  .adm-del:hover  { color: #791F1F; background: rgba(252,235,235,0.6); }
+  .adm-dup:hover  { color: #1D6B3A; background: rgba(209,245,230,0.6); }
+  .adm-hide:hover { color: #5B2D8E; background: rgba(240,225,255,0.6); }
+  .adm-hide.active { color: #5B2D8E; opacity: 0.6; }
+  .adm-info { color: #1D9E75; border-color: rgba(29,158,117,0.25); background: rgba(29,158,117,0.07); }
+  .adm-info:hover { background: rgba(29,158,117,0.18) !important; color: #085041; }
+  .adm-info.active { background: rgba(29,158,117,0.2) !important; }
+
+  /* Always show info btn, fade others */
+  .admin-row .adm-info { opacity: 1 !important; }
+
+
   .btn-edit {
     display: flex; align-items: center; gap: 4px;
     padding: 6px 12px; border-radius: 10px;
@@ -1257,14 +1317,16 @@ function render() {
             ${l.zoom ? '<a href="' + l.zoom + '" target="_blank" class="zoom-badge"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="6" fill="#2D8CFF"/><path d="M4 8.5C4 7.67 4.67 7 5.5 7h9C15.33 7 16 7.67 16 8.5v7c0 .83-.67 1.5-1.5 1.5h-9C4.67 17 4 16.33 4 15.5v-7zm12 2.1 3.6-2.4A.5.5 0 0 1 20 8.6v6.8a.5.5 0 0 1-.4.49l-3.6-2.4V10.6z" fill="white"/></svg> Zoom</a>' : ''}
             ${isAdmin && l.hidden ? '<span class="hidden-badge"><i class="ti ti-eye-off" style="font-size:10px"></i> Приховано</span>' : ''}
           </div>`;
-        return `
+
+        // ── STUDENT ROW ──
+        if (!isAdmin) return `
           <div class="lesson-row${l.hidden ? ' is-hidden' : ''}${isCurrentLesson ? ' is-current' : ''}">
             <div class="period-num-col">${period.num}</div>
             <div class="period-time-col">${period.start}<span class="period-time-end">${period.end}</span></div>
             <div class="divider-line"></div>
             <div class="subject-col">
-              <div class="subject-name">${isAdmin ? l.subject : displayName}</div>
-              <div class="subject-meta"><i class="ti ti-user" style="font-size:11px"></i> ${l.teacher}${isAdmin ? ' ' + groupLabel : ''}</div>
+              <div class="subject-name">${displayName}</div>
+              <div class="subject-meta"><i class="ti ti-user" style="font-size:11px"></i> ${l.teacher}</div>
             </div>
             ${nowBadge}
             <div class="lesson-details-desktop">
@@ -1272,16 +1334,39 @@ function render() {
               ${weekBadge}
               <span class="room-badge"><i class="ti ti-door" style="font-size:13px"></i>${l.room}</span>
               ${l.zoom ? '<a href="' + l.zoom + '" target="_blank" class="zoom-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="6" fill="#2D8CFF"/><path d="M4 8.5C4 7.67 4.67 7 5.5 7h9C15.33 7 16 7.67 16 8.5v7c0 .83-.67 1.5-1.5 1.5h-9C4.67 17 4 16.33 4 15.5v-7zm12 2.1 3.6-2.4A.5.5 0 0 1 20 8.6v6.8a.5.5 0 0 1-.4.49l-3.6-2.4V10.6z" fill="white"/></svg> Zoom</a>' : ''}
-              ${isAdmin && l.hidden ? '<span class="hidden-badge"><i class="ti ti-eye-off" style="font-size:10px"></i> Приховано</span>' : ''}
             </div>
-            ${isAdmin ? `<div class="actions">
-              <button class="btn-hide ${l.hidden ? 'active' : ''}" onclick="toggleHide('${id}')" title="${l.hidden ? 'Показати' : 'Приховати'}"><i class="ti ti-eye${l.hidden ? '' : '-off'}"></i></button>
-              <button class="btn-dup" onclick="duplicateLesson('${id}')"><i class="ti ti-copy"></i></button>
-              <button class="btn-edit" onclick="openEdit('${id}')"><i class="ti ti-edit"></i></button>
-              <button class="btn-del" onclick="confirmDelete('${id}')"><i class="ti ti-trash"></i></button>
-            </div>` : ''}
             <div class="btn-info-wrap">
               <button class="btn-info" onclick="toggleInfo(this)" title="Деталі" data-popup="${encodeURIComponent(infoContent)}"><i class="ti ti-info-circle"></i></button>
+            </div>
+          </div>`;
+
+        // ── ADMIN ROW ──
+        return `
+          <div class="lesson-row admin-row${l.hidden ? ' is-hidden' : ''}${isCurrentLesson ? ' is-current' : ''}">
+            <div class="period-num-col">${period.num}</div>
+            <div class="period-time-col">${period.start}<span class="period-time-end">${period.end}</span></div>
+            <div class="divider-line"></div>
+            <div class="subject-col">
+              <div class="subject-name">${l.subject}</div>
+              <div class="subject-meta">
+                <i class="ti ti-user" style="font-size:11px"></i> ${l.teacher}
+                ${nowBadge}
+              </div>
+            </div>
+            <div class="admin-meta">
+              <span class="type-badge type-${l.type}">${typeLabels[l.type] || l.type}</span>
+              ${weekBadge}
+              ${l.zoom ? '<span class="zoom-dot" title="Zoom"><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="6" fill="#2D8CFF"/><path d="M4 8.5C4 7.67 4.67 7 5.5 7h9C15.33 7 16 7.67 16 8.5v7c0 .83-.67 1.5-1.5 1.5h-9C4.67 17 4 16.33 4 15.5v-7zm12 2.1 3.6-2.4A.5.5 0 0 1 20 8.6v6.8a.5.5 0 0 1-.4.49l-3.6-2.4V10.6z" fill="white"/></svg></span>' : ''}
+              <span class="room-badge-sm"><i class="ti ti-door" style="font-size:11px"></i>${l.room}</span>
+              ${groupArr2.length ? `<span class="group-count-badge" title="${groupArr2.join(', ')}"><i class="ti ti-users" style="font-size:10px"></i> ${groupArr2.length > 2 ? groupArr2.slice(0,2).join(', ') + '…' : groupArr2.join(', ')}</span>` : '<span class="group-count-badge shared-badge"><i class="ti ti-world" style="font-size:10px"></i> всі</span>'}
+              ${l.hidden ? '<span class="hidden-dot" title="Приховано"><i class="ti ti-eye-off" style="font-size:11px"></i></span>' : ''}
+            </div>
+            <div class="admin-actions">
+              <button class="adm-btn adm-hide ${l.hidden ? 'active' : ''}" onclick="toggleHide('${id}')" title="${l.hidden ? 'Показати' : 'Приховати'}"><i class="ti ti-eye${l.hidden ? '' : '-off'}"></i></button>
+              <button class="adm-btn adm-dup" onclick="duplicateLesson('${id}')" title="Дублювати"><i class="ti ti-copy"></i></button>
+              <button class="adm-btn adm-edit" onclick="openEdit('${id}')" title="Редагувати"><i class="ti ti-edit"></i></button>
+              <button class="adm-btn adm-del" onclick="confirmDelete('${id}')" title="Видалити"><i class="ti ti-trash"></i></button>
+              <button class="adm-btn adm-info" onclick="toggleInfo(this)" title="Деталі" data-popup="${encodeURIComponent(infoContent)}"><i class="ti ti-info-circle"></i></button>
             </div>
           </div>`;
       }).join('');
@@ -1369,7 +1454,7 @@ window.toggleInfo = (btn) => {
   // Close
   globalPopup.style.display = 'none';
   globalPopup._sourceBtn = null;
-  document.querySelectorAll('.btn-info.active').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.btn-info.active, .adm-info.active').forEach(b => b.classList.remove('active'));
 
   if (!isOpen) {
     const html = decodeURIComponent(btn.dataset.popup || '');
@@ -1422,7 +1507,7 @@ document.addEventListener('click', e => {
     const globalPopup = document.getElementById('globalInfoPopup');
     globalPopup.style.display = 'none';
     globalPopup._sourceBtn = null;
-    document.querySelectorAll('.btn-info.active').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.btn-info.active, .adm-info.active').forEach(b => b.classList.remove('active'));
   }
 });
 
