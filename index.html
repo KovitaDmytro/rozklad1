@@ -867,27 +867,124 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
 <div class="toast" id="toast"><span id="toastMsg"></span></div>
 
 <script>
+// ── Firebase REST API (no SDK needed) ────────────────────
+const DB_URL = "https://rozklad-zanyat-default-rtdb.europe-west1.firebasedatabase.app";
+const API_KEY = "AIzaSyBprMBFWe64a4sB8dH6icebTp5In5voFPk";
+const AUTH_URL = "https://identitytoolkit.googleapis.com/v1/accounts";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyBprMBFWe64a4sB8dH6icebTp5In5voFPk",
-  authDomain: "rozklad-zanyat.firebaseapp.com",
-  databaseURL: "https://rozklad-zanyat-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "rozklad-zanyat",
-  storageBucket: "rozklad-zanyat.firebasestorage.app",
-  messagingSenderId: "490622824125",
-  appId: "1:490622824125:web:91385f2c144b613fd391d4"
+let _idToken = null;
+let _authCallbacks = [];
+let _listeners = {}; // path -> { interval, callbacks }
+
+// ── Auth ──────────────────────────────────────────────────
+const auth = {
+  async signInWithEmailAndPassword(email, pass) {
+    const res = await fetch(`${AUTH_URL}:signInWithPassword?key=${API_KEY}`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ email, password: pass, returnSecureToken: true })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || 'Auth error');
+    _idToken = data.idToken;
+    localStorage.setItem('_fbToken', data.idToken);
+    localStorage.setItem('_fbRefresh', data.refreshToken);
+    _authCallbacks.forEach(cb => cb({ email }));
+  },
+  async signOut() {
+    _idToken = null;
+    localStorage.removeItem('_fbToken');
+    localStorage.removeItem('_fbRefresh');
+    _authCallbacks.forEach(cb => cb(null));
+  },
+  onAuthStateChanged(cb) {
+    _authCallbacks.push(cb);
+    // Try restore session
+    const token = localStorage.getItem('_fbToken');
+    const refresh = localStorage.getItem('_fbRefresh');
+    if (token && refresh) {
+      // Refresh token to verify
+      fetch(`https://securetoken.googleapis.com/v1/token?key=${API_KEY}`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/x-www-form-urlencoded'},
+        body: `grant_type=refresh_token&refresh_token=${refresh}`
+      }).then(r => r.json()).then(d => {
+        if (d.id_token) {
+          _idToken = d.id_token;
+          localStorage.setItem('_fbToken', d.id_token);
+          localStorage.setItem('_fbRefresh', d.refresh_token);
+          cb({ email: 'admin' });
+        } else {
+          localStorage.removeItem('_fbToken');
+          localStorage.removeItem('_fbRefresh');
+          cb(null);
+        }
+      }).catch(() => cb(null));
+    } else {
+      setTimeout(() => cb(null), 0);
+    }
+  }
 };
 
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-const auth = firebase.auth();
+// ── Database ──────────────────────────────────────────────
+function dbUrl(path, token) {
+  const base = `${DB_URL}/${path}.json`;
+  return token ? `${base}?auth=${token}` : base;
+}
+
+const db = {
+  async get(path) {
+    const res = await fetch(dbUrl(path, _idToken));
+    return res.ok ? res.json() : null;
+  },
+  async set(path, data) {
+    await fetch(dbUrl(path, _idToken), {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(data)
+    });
+  },
+  async push(path, data) {
+    const res = await fetch(dbUrl(path, _idToken), {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(data)
+    });
+    return res.json(); // { name: "-Nxxx" }
+  },
+  async update(path, data) {
+    await fetch(dbUrl(path, _idToken), {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(data)
+    });
+  },
+  async remove(path) {
+    await fetch(dbUrl(path, _idToken), { method: 'DELETE' });
+  },
+  // Polling-based "real-time" listener
+  on(path, cb) {
+    if (!_listeners[path]) _listeners[path] = { callbacks: [], last: null };
+    _listeners[path].callbacks.push(cb);
+    // Fetch immediately
+    const poll = async () => {
+      const data = await db.get(path);
+      const json = JSON.stringify(data);
+      if (json !== _listeners[path].last) {
+        _listeners[path].last = json;
+        _listeners[path].callbacks.forEach(fn => fn(data));
+      }
+    };
+    poll();
+    if (!_listeners[path].interval) {
+      _listeners[path].interval = setInterval(poll, 5000);
+    }
+  }
+};
 
 let isAdmin = false;
 let activeDay = 'all';
@@ -900,10 +997,13 @@ let catalogTeachers = {};   // { id: { name, title } }
 const days = ['Понеділок','Вівторок','Середа','Четвер','Пятниця','Субота'];
 const dayCls = {Понеділок:'day-mon',Вівторок:'day-tue',Середа:'day-wed',Четвер:'day-thu',Пятниця:'day-fri',Субота:'day-sat'};
 const typeLabels = {lec:'Лекція',prac:'Практика',lab:'Лабораторна',sem:'Семінар'};
-const lessonsRef = db.ref('lessons');
-const subjectsRef = db.ref('catalog/subjects');
-const teachersRef = db.ref('catalog/teachers');
-const settingsRef = db.ref('settings');
+const lessonsRef = 'lessons';
+// snap wrapper for compat
+function snap(cb) { return (data) => cb({ val: () => data }); }
+
+const subjectsRef = 'catalog/subjects';
+const teachersRef = 'catalog/teachers';
+const settingsRef = 'settings';
 
 // ── Пари ─────────────────────────────────────────────
 const PERIODS = [
@@ -1048,19 +1148,19 @@ function renderGroupTabs() {
   tabs.appendChild(list);
 }
 
-subjectsRef.on('value', (snap) => { catalogSubjects = snap.val() || {}; });
-teachersRef.on('value', (snap) => { catalogTeachers = snap.val() || {}; });
-settingsRef.on('value', (snap) => {
-  appSettings = snap.val() || {};
+db.on(subjectsRef, (d) => { catalogSubjects = d || {}; });
+db.on(teachersRef, (d) => { catalogTeachers = d || {}; });
+db.on(settingsRef, (d) => {
+  appSettings = d || {};
   semesterStart = appSettings.semesterStart || null;
   updateLayout();
 });
-db.ref('groups').on('value', (snap) => {
-  extraGroups = snap.val() || {};
+db.on('groups', (d) => {
+  extraGroups = d || {};
   updateLayout();
 });
-lessonsRef.on('value', (snap) => {
-  lessons = snap.val() || {};
+db.on(lessonsRef, (d) => {
+  lessons = d || {};
   const slug = getGroupFromURL();
   if (!isAdmin && slug) {
     // Студент: завжди відновлюємо групу зі slug
@@ -1339,10 +1439,10 @@ window.saveLesson = async (id) => {
     week: document.querySelector('input[name=fWeek]:checked')?.value || 'all'
   };
   if (id) {
-    await db.ref('lessons/' + id).update(obj);
+    await db.update('lessons/' + id, obj);
     showToast('✅ Заняття оновлено', 'green');
   } else {
-    await lessonsRef.push(obj);
+    await db.push(lessonsRef, obj);
     showToast('✅ Заняття додано', 'green');
   }
   closeModal();
@@ -1350,19 +1450,19 @@ window.saveLesson = async (id) => {
 window.toggleHide = async (id) => {
   const l = lessons[id];
   if (!l) return;
-  await db.ref('lessons/' + id).update({ hidden: !l.hidden });
+  await db.update('lessons/' + id, { hidden: !l.hidden });
   showToast(l.hidden ? '👁 Заняття показано' : '🙈 Заняття приховано', 'green');
 };
 
 window.archiveLesson = async (id) => {
   const l = lessons[id];
   if (!l) return;
-  await db.ref('lessons/' + id).update({ archived: true });
+  await db.update('lessons/' + id, { archived: true });
   showToast('📦 Заняття в архіві', 'green');
 };
 
 window.restoreLesson = async (id) => {
-  await db.ref('lessons/' + id).update({ archived: false });
+  await db.update('lessons/' + id, { archived: false });
   showToast('✅ Заняття відновлено', 'green');
   openArchive(); // refresh archive modal
 };
@@ -1443,9 +1543,9 @@ window.addCatalogItem = async () => {
   const code = (document.getElementById('catCode').value || '').trim();
   if (!name) { document.getElementById('catName').focus(); return; }
   const isSubjects = catalogActiveTab === 'subjects';
-  const fbRef = isSubjects ? subjectsRef : teachersRef;
+  const fbPath = isSubjects ? subjectsRef : teachersRef;
   const item = isSubjects ? { name, code } : { name, title: code };
-  await fbRef.push(item);
+  await db.push(fbPath, item);
   showToast('✅ Додано', 'green');
   renderCatalogModal();
 };
@@ -1454,13 +1554,13 @@ window.addGroupFromCatalog = async () => {
   const name = document.getElementById('catName').value.trim();
   if (!name) { document.getElementById('catName').focus(); return; }
   if (getGroups().includes(name)) { alert('Група «' + name + '» вже існує'); return; }
-  await db.ref('groups/' + name).set(true);
+  await db.set('groups/' + name, true);
   showToast('✅ Група «' + name + '» додана', 'green');
   renderCatalogModal();
 };
 
 window.deleteGroup = async (name) => {
-  await db.ref('groups/' + name).remove();
+  await db.remove('groups/' + name);
   // Also remove from all lessons
   const updates = {};
   Object.entries(lessons).forEach(([id, l]) => {
@@ -1469,7 +1569,7 @@ window.deleteGroup = async (name) => {
       updates['lessons/' + id + '/group'] = g.filter(x => x !== name);
     }
   });
-  if (Object.keys(updates).length) await db.ref().update(updates);
+  if (Object.keys(updates).length) await db.update('', updates);
   showToast('🗑 Групу видалено', 'red');
   renderCatalogModal();
   renderGroupTabs();
@@ -1477,7 +1577,7 @@ window.deleteGroup = async (name) => {
 
 window.deleteCatalogItem = async (id) => {
   const isSubjects = catalogActiveTab === 'subjects';
-  await db.ref((isSubjects ? 'catalog/subjects/' : 'catalog/teachers/') + id).remove();
+  await db.remove((isSubjects ? 'catalog/subjects/' : 'catalog/teachers/') + id);
   showToast('🗑 Видалено', 'red');
   renderCatalogModal();
 };
@@ -1520,7 +1620,7 @@ window.confirmDelete = (id) => {
   document.getElementById('overlay').classList.add('open');
 };
 window.deleteLesson = async (id) => {
-  await db.ref('lessons/' + id).remove();
+  await db.remove('lessons/' + id);
   closeModal();
   showToast('🗑 Заняття видалено', 'red');
 };
