@@ -792,7 +792,7 @@
     <span class="admin-badge" id="adminBadge"><i class="ti ti-shield-check"></i> Адмін</span>
   </div>
   <div class="header-actions">
-    <button class="glass-btn login-btn" id="loginBtn" onclick="openLogin()"><i class="ti ti-lock"></i> Вхід</button>
+    <button class="glass-btn login-btn" id="loginBtn" onclick="openLogin()" style="display:none"><i class="ti ti-lock"></i> Вхід адміну</button>
     <button class="glass-btn" id="catalogBtn" onclick="openCatalog()" style="display:none"><i class="ti ti-books"></i> Каталог</button>
     <button class="glass-btn" id="groupsBtn" onclick="openGroupLinks()" style="display:none"><i class="ti ti-link"></i> Посилання</button>
     <button class="glass-btn" id="archiveBtn" onclick="openArchive()" style="display:none"><i class="ti ti-archive"></i> Архів</button>
@@ -1050,8 +1050,10 @@ onValue(lessonsRef, (snap) => {
 
 onAuthStateChanged(auth, (user) => {
   isAdmin = !!user;
+  const hasGroupParam = !!getGroupFromURL();
   document.getElementById('adminBadge').style.display  = isAdmin ? 'inline-flex' : 'none';
-  document.getElementById('loginBtn').style.display    = isAdmin ? 'none' : 'flex';
+  // Кнопку "Вхід адміну" показуємо тільки якщо немає ?group= в URL (не студент) і не залогінений
+  document.getElementById('loginBtn').style.display    = (!isAdmin && !hasGroupParam) ? 'flex' : 'none';
   document.getElementById('logoutBtn').style.display   = isAdmin ? 'flex' : 'none';
   document.getElementById('addBtn').style.display      = isAdmin ? 'flex' : 'none';
   document.getElementById('catalogBtn').style.display  = isAdmin ? 'flex' : 'none';
