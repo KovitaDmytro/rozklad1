@@ -630,6 +630,9 @@
     border: 1px solid rgba(255,255,255,0.8);
     padding: 26px;
     width: 420px; max-width: 96vw;
+  }
+  .modal.modal-wide {
+    width: 680px;
     box-shadow: 0 24px 80px rgba(0,0,0,0.2), 0 1.5px 0 rgba(255,255,255,0.9) inset;
     animation: modalIn 0.3s cubic-bezier(0.34,1.56,0.64,1);
   }
@@ -642,7 +645,15 @@
     color: var(--text-primary); display: flex; align-items: center; gap: 9px;
     letter-spacing: -0.3px;
   }
-  .field { margin-bottom: 12px; }
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 14px;
+  }
+  .form-grid .field { margin-bottom: 10px; }
+  .form-grid .field.col-span-2 { grid-column: 1 / -1; }
+
+  
   .field label {
     display: block; font-size: 11px; color: var(--text-secondary);
     margin-bottom: 5px; font-weight: 700;
@@ -1299,43 +1310,50 @@ function formHTML(id, l) {
       '</label>';
   }).join('');
 
+  // Add wide class to modal
+  setTimeout(() => { const m = document.getElementById('modal'); if (m) m.classList.add('modal-wide'); }, 0);
+
   return '<div class="modal-title"><i class="ti ti-' + (l ? 'edit' : 'plus') + '"></i> ' + (l ? 'Редагувати заняття' : 'Нове заняття') + '</div>' +
-    '<div class="field"><label>Повна назва предмету</label>' +
-      '<input id="fSubject" list="subjectList" value="' + (l ? l.subject : '') + '" placeholder="Напр.: Програмування мікроконтролерів" autocomplete="off">' +
-      '<datalist id="subjectList">' + Object.values(catalogSubjects).map(s => '<option value="' + s.name + '">').join('') + '</datalist>' +
-    '</div>' +
-    '<div class="field"><label>Скорочена назва <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;opacity:.7">(для мобільного)</span></label>' +
-      '<input id="fShort" value="' + (l ? (l.short || '') : '') + '" placeholder="Напр.: Прогр. мікроконтр." maxlength="30">' +
-    '</div>' +
-    '<div class="field"><label>Викладач</label>' +
-      '<input id="fTeacher" list="teacherList" value="' + (l ? l.teacher : '') + '" placeholder="Оберіть або введіть викладача" autocomplete="off">' +
-      '<datalist id="teacherList">' + Object.values(catalogTeachers).map(t => '<option value="' + t.name + '">').join('') + '</datalist>' +
-    '</div>' +
-    '<div class="field-row">' +
+    '<div class="form-grid">' +
+      // Row 1: subject (full width)
+      '<div class="field col-span-2"><label>Повна назва предмету</label>' +
+        '<input id="fSubject" list="subjectList" value="' + (l ? l.subject : '') + '" placeholder="Напр.: Програмування мікроконтролерів" autocomplete="off">' +
+        '<datalist id="subjectList">' + Object.values(catalogSubjects).map(s => '<option value="' + s.name + '">').join('') + '</datalist>' +
+      '</div>' +
+      // Row 2: short name + teacher
+      '<div class="field"><label>Скорочена назва <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;opacity:.7">(мобільний)</span></label>' +
+        '<input id="fShort" value="' + (l ? (l.short || '') : '') + '" placeholder="Напр.: Прогр. мікроконтр." maxlength="30">' +
+      '</div>' +
+      '<div class="field"><label>Викладач</label>' +
+        '<input id="fTeacher" list="teacherList" value="' + (l ? l.teacher : '') + '" placeholder="Оберіть або введіть викладача" autocomplete="off">' +
+        '<datalist id="teacherList">' + Object.values(catalogTeachers).map(t => '<option value="' + t.name + '">').join('') + '</datalist>' +
+      '</div>' +
+      // Row 3: day + type
       '<div class="field"><label>День тижня</label><select id="fDay">' + dayOpts + '</select></div>' +
       '<div class="field"><label>Тип заняття</label><select id="fType">' + typeOpts + '</select></div>' +
-    '</div>' +
-    '<div class="field"><label>Пара (час заняття)</label>' +
-      '<select id="fPeriod">' +
-        PERIODS.map((p, i) => {
-          const selected = l && l.time === p.start ? ' selected' : (!l && i === 0 ? ' selected' : '');
-          return `<option value="${p.start}"${selected}>${p.num} пара — ${p.start}–${p.end}</option>`;
-        }).join('') +
-      '</select>' +
-    '</div>' +
-    '<div class="field-row">' +
+      // Row 4: period + room
+      '<div class="field"><label>Пара (час заняття)</label>' +
+        '<select id="fPeriod">' +
+          PERIODS.map((p, i) => {
+            const selected = l && l.time === p.start ? ' selected' : (!l && i === 0 ? ' selected' : '');
+            return `<option value="${p.start}"${selected}>${p.num} пара — ${p.start}–${p.end}</option>`;
+          }).join('') +
+        '</select>' +
+      '</div>' +
       '<div class="field"><label>Аудиторія</label><input id="fRoom" value="' + (l ? l.room : '') + '" placeholder="А-201"></div>' +
-      '<div class="field" style="flex:2"><label>Групи <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;opacity:.7">(нічого = спільне)</span></label>' +
+      // Row 5: groups (full width)
+      '<div class="field col-span-2"><label>Групи <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;opacity:.7">(нічого = спільне для всіх)</span></label>' +
         '<div class="group-checks" id="fGroupChecks">' + groupChecks + '</div>' +
       '</div>' +
+      // Row 6: zoom + week
+      '<div class="field"><label>Посилання Zoom <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;opacity:.7">(необов&#39;язково)</span></label>' +
+        '<input id="fZoom" value="' + (l ? (l.zoom || '') : '') + '" placeholder="https://zoom.us/j/..."></div>' +
+      '<div class="field"><label>Тиждень</label><div class="field-week">' +
+        '<div class="week-opt"><input type="radio" name="fWeek" id="fw-all" value="all"' + (!l || !l.week || l.week==='all' ? ' checked' : '') + '><label for="fw-all">Щотижня</label></div>' +
+        '<div class="week-opt"><input type="radio" name="fWeek" id="fw-1" value="1"' + (l && l.week==='1' ? ' checked' : '') + '><label for="fw-1">1-й тижд.</label></div>' +
+        '<div class="week-opt"><input type="radio" name="fWeek" id="fw-2" value="2"' + (l && l.week==='2' ? ' checked' : '') + '><label for="fw-2">2-й тижд.</label></div>' +
+      '</div></div>' +
     '</div>' +
-    '<div class="field"><label>Посилання Zoom <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;opacity:.7">(необов&#39;язково)</span></label>' +
-      '<input id="fZoom" value="' + (l ? (l.zoom || '') : '') + '" placeholder="https://zoom.us/j/..."></div>' +
-    '<div class="field"><label>Тиждень</label><div class="field-week">' +
-      '<div class="week-opt"><input type="radio" name="fWeek" id="fw-all" value="all"' + (!l || !l.week || l.week==='all' ? ' checked' : '') + '><label for="fw-all">Щотижня</label></div>' +
-      '<div class="week-opt"><input type="radio" name="fWeek" id="fw-1" value="1"' + (l && l.week==='1' ? ' checked' : '') + '><label for="fw-1">1-й тиждень</label></div>' +
-      '<div class="week-opt"><input type="radio" name="fWeek" id="fw-2" value="2"' + (l && l.week==='2' ? ' checked' : '') + '><label for="fw-2">2-й тиждень</label></div>' +
-    '</div></div>' +
     '<div class="modal-actions">' +
       '<button class="btn-cancel" onclick="closeModal()">Скасувати</button>' +
       '<button class="btn-save" onclick="saveLesson(&apos;' + (id || '') + '&apos;)">' + (l ? '💾 Зберегти' : '➕ Додати') + '</button>' +
