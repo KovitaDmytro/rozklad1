@@ -1162,39 +1162,41 @@ function renderGroupTabs() {
 
 db.on(subjectsRef, (d) => { catalogSubjects = d || {}; });
 db.on(teachersRef, (d) => { catalogTeachers = d || {}; });
-db.on(settingsRef, (d) => {
-  appSettings = d || {};
-  semesterStart = appSettings.semesterStart || null;
-  updateLayout();
-});
-db.on('groups', (d) => {
-  extraGroups = d || {};
-  updateLayout();
-});
-db.on(lessonsRef, (d) => {
-  lessons = d || {};
-  const slug = getGroupFromURL();
-  if (!isAdmin && slug) {
-    // Студент: завжди відновлюємо групу зі slug
-    const matched = getGroupBySlug(slug, getGroups());
-    if (matched) activeGroup = matched;
-  } else if (isAdmin && activeGroup === 'all') {
-    // Адмін: залишаємо 'all' — покаже всі заняття
-  }
-  updateLayout();
-});
 
 // Скорочує ПІБ до "Прізвище І. П."
 function shortenTeacher(full) {
   if (!full) return '';
-  // Прибираємо посаду (ДОЦЕНТ, ПРОФ, etc.) якщо є
   const withoutTitle = full.replace(/^(ДОЦЕНТ|ПРОФЕСОР|АСИСТЕНТ|ВИК\.?|СТАРШИЙ\s+ВИК\.?)\s*/i, '').trim();
   const parts = withoutTitle.split(/\s+/);
   if (parts.length === 1) return withoutTitle;
-  // Прізвище + ініціали
   const last = parts[0];
   const initials = parts.slice(1).map(p => p[0] ? p[0].toUpperCase() + '.' : '').join(' ');
   return last + ' ' + initials;
+}
+
+let _dataLoaded = false;
+function startDataListeners() {
+  if (_dataLoaded) return;
+  _dataLoaded = true;
+
+  db.on(settingsRef, (d) => {
+    appSettings = d || {};
+    semesterStart = appSettings.semesterStart || null;
+    updateLayout();
+  });
+  db.on('groups', (d) => {
+    extraGroups = d || {};
+    updateLayout();
+  });
+  db.on(lessonsRef, (d) => {
+    lessons = d || {};
+    const slug = getGroupFromURL();
+    if (!isAdmin && slug) {
+      const matched = getGroupBySlug(slug, getGroups());
+      if (matched) activeGroup = matched;
+    }
+    updateLayout();
+  });
 }
 
 auth.onAuthStateChanged((user) => {
@@ -1207,6 +1209,7 @@ auth.onAuthStateChanged((user) => {
   document.getElementById('catalogBtn').style.display  = isAdmin ? 'flex' : 'none';
   document.getElementById('groupsBtn').style.display   = isAdmin ? 'flex' : 'none';
   document.getElementById('archiveBtn').style.display  = isAdmin ? 'flex' : 'none';
+  startDataListeners();
   updateLayout();
 });
 
