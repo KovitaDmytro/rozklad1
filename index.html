@@ -880,6 +880,9 @@
   .info-row i { font-size: 14px; color: var(--accent); flex-shrink: 0; }
 
   @media(max-width: 600px) {
+    /* Admin rows — never show on mobile, admin uses desktop only */
+    .admin-row { display: none !important; }
+
     .lesson-details-desktop { display: none; }
     .lesson-row { padding: 10px 10px; gap: 8px; align-items: center; flex-wrap: nowrap; }
     .period-num-col { min-width: 14px; font-size: 10px; flex-shrink: 0; }
@@ -890,16 +893,8 @@
     .subject-name { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .subject-meta { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .now-badge { flex-shrink: 0; font-size: 9px; padding: 2px 6px; }
-    .actions { gap: 3px; flex-shrink: 0; }
-    .actions .btn-edit, .actions .btn-del, .actions .btn-hide {
-      padding: 6px; border-radius: 9px; min-width: 30px; min-height: 30px;
-      display: flex; justify-content: center; align-items: center; font-size: 0;
-    }
-    .actions .btn-edit i, .actions .btn-del i, .actions .btn-hide i { font-size: 14px; margin: 0; }
-    .actions .btn-dup { display: none; }
     .btn-info-wrap { flex-shrink: 0; }
     .btn-info { width: 30px; height: 30px; font-size: 15px; }
-    .info-popup-wrap { right: 0; min-width: 200px; max-width: 260px; }
     .period-empty { padding: 6px 10px; }
     .period-empty .subject-col { display: none; }
   }
@@ -936,7 +931,8 @@
   <!-- Group header — shown to student (when ?group= is set and not admin) -->
   <div id="studentGroupHeader" style="display:none;align-items:center;gap:10px;margin-bottom:12px;padding:12px 16px;border-radius:var(--radius-md);background:rgba(255,255,255,0.35);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.5)">
     <i class="ti ti-users" style="color:#1D9E75;font-size:18px"></i>
-    <span id="studentGroupName" style="font-size:15px;font-weight:700;color:var(--text-primary)"></span>
+    <span id="studentGroupName" style="font-size:15px;font-weight:700;color:var(--text-primary);flex:1"></span>
+    <span id="studentWeekBadge" style="display:none;align-items:center;gap:5px;font-size:12px;font-weight:700;padding:5px 12px;border-radius:100px;white-space:nowrap"></span>
   </div>
 
   <!-- Group selector — shown only to admin -->
@@ -1036,6 +1032,19 @@ function getCurrentWeekNum() {
   return (weekIndex % 2) + 1; // 1 або 2
 }
 
+function updateStudentWeekBadge() {
+  const badge = document.getElementById('studentWeekBadge');
+  if (!badge) return;
+  if (!semesterStart) { badge.style.display = 'none'; return; }
+  const week = getCurrentWeekNum();
+  const isW1 = week === 1;
+  badge.style.display = 'inline-flex';
+  badge.style.background = isW1 ? 'rgba(29,158,117,0.13)' : 'rgba(230,160,0,0.13)';
+  badge.style.color = isW1 ? '#0a5c43' : '#7a4f00';
+  badge.style.border = isW1 ? '1px solid rgba(29,158,117,0.3)' : '1px solid rgba(230,160,0,0.35)';
+  badge.innerHTML = `<i class="ti ti-calendar-week" style="font-size:13px"></i> ${week}-й тиждень`;
+}
+
 // Знаходить пару за часом початку (08:30 → 'І' тощо)
 function getPeriodByTime(time) {
   if (!time) return null;
@@ -1112,6 +1121,7 @@ function updateLayout() {
     activeGroup = matched.name;
     studentHeader.style.display = 'flex';
     document.getElementById('studentGroupName').textContent = matched.name;
+    updateStudentWeekBadge();
     groupSection.style.display  = 'none';
     noGroupScreen.style.display = 'none';
     if (toolbar) toolbar.style.display = 'flex';
@@ -1715,13 +1725,24 @@ function renderCatalogModal() {
     const items = isSubjects ? catalogSubjects : catalogTeachers;
     listHTML = Object.entries(items).length
       ? Object.entries(items).map(([id, item]) => `
-          <div class="catalog-item">
-            <div class="catalog-item-info">
-              <div class="catalog-item-name">${item.name}</div>
-              ${item.code ? '<div class="catalog-item-sub">' + item.code + '</div>' : ''}
-              ${item.title ? '<div class="catalog-item-sub">' + item.title + '</div>' : ''}
+          <div class="catalog-item" data-cid="${id}" data-cname="${(item.name||'').replace(/"/g,'&quot;')}" data-ctype="${isSubjects ? 'subjects' : 'teachers'}">
+            <div class="catalog-item-info" style="flex:1">
+              <div class="cname-view" style="display:flex;flex-direction:column;gap:1px">
+                <div class="catalog-item-name">${item.name}</div>
+                ${item.code ? '<div class="catalog-item-sub">' + item.code + '</div>' : ''}
+                ${item.title ? '<div class="catalog-item-sub">' + item.title + '</div>' : ''}
+              </div>
+              <div class="cname-edit" style="display:none;align-items:center;gap:6px;margin-top:4px">
+                <input class="cinput" value="${(item.name||'').replace(/"/g,'&quot;')}" maxlength="80"
+                  style="padding:5px 10px;border-radius:10px;border:1px solid rgba(29,158,117,0.4);background:rgba(255,255,255,0.6);font-size:13px;font-weight:600;font-family:inherit;outline:none;flex:1" />
+                <button class="cbtn-save" style="padding:5px 10px;border-radius:100px;border:none;background:linear-gradient(135deg,#1D9E75,#0F6E56);color:white;font-size:12px;font-weight:700;cursor:pointer"><i class="ti ti-check"></i></button>
+                <button class="cbtn-cancel" style="padding:5px 10px;border-radius:100px;border:1px solid rgba(0,0,0,0.1);background:rgba(0,0,0,0.05);color:#666;font-size:12px;cursor:pointer"><i class="ti ti-x"></i></button>
+              </div>
             </div>
-            <button class="btn-cat-del" onclick="deleteCatalogItem('${id}')"><i class="ti ti-trash"></i></button>
+            <div style="display:flex;gap:6px;flex-shrink:0">
+              <button class="btn-cat-edit cbtn-edit"><i class="ti ti-pencil"></i></button>
+              <button class="btn-cat-del cbtn-del"><i class="ti ti-trash"></i></button>
+            </div>
           </div>`).join('')
       : '<div class="archive-empty"><i class="ti ti-database" style="font-size:28px;display:block;margin-bottom:8px;opacity:.3"></i>Список порожній</div>';
     addRow = isSubjects
@@ -1807,6 +1828,62 @@ function renderCatalogModal() {
       item.querySelector('.gbtn-del').addEventListener('click', () => deleteGroup(gname));
     });
   }
+
+  // ── Bind subject / teacher edit events ──
+  modal.querySelectorAll('.catalog-item[data-cid]').forEach(item => {
+    const cid   = item.dataset.cid;
+    const ctype = item.dataset.ctype; // 'subjects' or 'teachers'
+    const origName = item.dataset.cname;
+    const view    = item.querySelector('.cname-view');
+    const editBox = item.querySelector('.cname-edit');
+    const inp     = item.querySelector('.cinput');
+
+    const showEdit = () => { view.style.display = 'none'; editBox.style.display = 'flex'; inp.focus(); inp.select(); };
+    const hideEdit = () => { view.style.display = 'flex'; editBox.style.display = 'none'; inp.value = origName; };
+
+    const doSave = async () => {
+      const newName = inp.value.trim();
+      if (!newName) { inp.focus(); return; }
+      if (newName === origName) { hideEdit(); return; }
+
+      // 1. Update catalog entry
+      const fbPath = `catalog/${ctype}/${cid}`;
+      const field = ctype === 'subjects' ? 'name' : 'name';
+      await update(ref(db, fbPath), { [field]: newName });
+
+      // 2. Mass-update all lessons that reference the old name
+      const updates = {};
+      if (ctype === 'subjects') {
+        Object.entries(lessons).forEach(([lid, l]) => {
+          if (l.subject === origName) {
+            updates[`lessons/${lid}/subject`] = newName;
+            // Also update short name only if it matched the full name
+            if (!l.short || l.short === origName) updates[`lessons/${lid}/short`] = newName;
+          }
+        });
+      } else {
+        Object.entries(lessons).forEach(([lid, l]) => {
+          if (l.teacher === origName) updates[`lessons/${lid}/teacher`] = newName;
+        });
+      }
+
+      const count = Object.keys(updates).length;
+      if (count) await update(ref(db), updates);
+
+      const label = ctype === 'subjects' ? 'Предмет' : 'Викладача';
+      showToast(`✅ ${label} перейменовано${count ? ` · оновлено ${Math.round(count / (ctype === 'subjects' ? 2 : 1))} занять` : ''}`, 'green');
+      renderCatalogModal();
+    };
+
+    item.querySelector('.cbtn-edit').addEventListener('click', showEdit);
+    item.querySelector('.cbtn-cancel').addEventListener('click', hideEdit);
+    item.querySelector('.cbtn-save').addEventListener('click', doSave);
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') doSave();
+      if (e.key === 'Escape') hideEdit();
+    });
+    item.querySelector('.cbtn-del').addEventListener('click', () => deleteCatalogItem(cid));
+  });
 }
 
 window.switchCatalogTab = (tab) => { catalogActiveTab = tab; renderCatalogModal(); };
@@ -2188,6 +2265,7 @@ window.saveSettings = async () => {
   try {
     await set(ref(db, 'settings/semesterStart'), val);
     semesterStart = val;
+    updateStudentWeekBadge();
     showToast('✅ Дату збережено', 'green');
     closeModal();
   } catch(e) {
