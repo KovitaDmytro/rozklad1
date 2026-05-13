@@ -867,13 +867,13 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
 <div class="toast" id="toast"><span id="toastMsg"></span></div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, set, onValue, push, update, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+<script>
 
 const firebaseConfig = {
   apiKey: "AIzaSyBprMBFWe64a4sB8dH6icebTp5In5voFPk",
@@ -885,9 +885,9 @@ const firebaseConfig = {
   appId: "1:490622824125:web:91385f2c144b613fd391d4"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-const auth = getAuth(app);
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const auth = firebase.auth();
 
 let isAdmin = false;
 let activeDay = 'all';
@@ -900,10 +900,10 @@ let catalogTeachers = {};   // { id: { name, title } }
 const days = ['Понеділок','Вівторок','Середа','Четвер','Пятниця','Субота'];
 const dayCls = {Понеділок:'day-mon',Вівторок:'day-tue',Середа:'day-wed',Четвер:'day-thu',Пятниця:'day-fri',Субота:'day-sat'};
 const typeLabels = {lec:'Лекція',prac:'Практика',lab:'Лабораторна',sem:'Семінар'};
-const lessonsRef = ref(db, 'lessons');
-const subjectsRef = ref(db, 'catalog/subjects');
-const teachersRef = ref(db, 'catalog/teachers');
-const settingsRef = ref(db, 'settings');
+const lessonsRef = db.ref('lessons');
+const subjectsRef = db.ref('catalog/subjects');
+const teachersRef = db.ref('catalog/teachers');
+const settingsRef = db.ref('settings');
 
 // ── Пари ─────────────────────────────────────────────
 const PERIODS = [
@@ -1048,18 +1048,18 @@ function renderGroupTabs() {
   tabs.appendChild(list);
 }
 
-onValue(subjectsRef, (snap) => { catalogSubjects = snap.val() || {}; });
-onValue(teachersRef, (snap) => { catalogTeachers = snap.val() || {}; });
-onValue(settingsRef, (snap) => {
+subjectsRef.on('value', (snap) => { catalogSubjects = snap.val() || {}; });
+teachersRef.on('value', (snap) => { catalogTeachers = snap.val() || {}; });
+settingsRef.on('value', (snap) => {
   appSettings = snap.val() || {};
   semesterStart = appSettings.semesterStart || null;
   updateLayout();
 });
-onValue(ref(db, 'groups'), (snap) => {
+db.ref('groups').on('value', (snap) => {
   extraGroups = snap.val() || {};
   updateLayout();
 });
-onValue(lessonsRef, (snap) => {
+lessonsRef.on('value', (snap) => {
   lessons = snap.val() || {};
   const slug = getGroupFromURL();
   if (!isAdmin && slug) {
@@ -1085,7 +1085,7 @@ function shortenTeacher(full) {
   return last + ' ' + initials;
 }
 
-onAuthStateChanged(auth, (user) => {
+auth.onAuthStateChanged((user) => {
   isAdmin = !!user;
   const isAdminURL = new URLSearchParams(window.location.search).has('admin');
   document.getElementById('adminBadge').style.display  = isAdmin ? 'inline-flex' : 'none';
@@ -1339,10 +1339,10 @@ window.saveLesson = async (id) => {
     week: document.querySelector('input[name=fWeek]:checked')?.value || 'all'
   };
   if (id) {
-    await update(ref(db, 'lessons/' + id), obj);
+    await db.ref('lessons/' + id).update(obj);
     showToast('✅ Заняття оновлено', 'green');
   } else {
-    await push(lessonsRef, obj);
+    await lessonsRef.push(obj);
     showToast('✅ Заняття додано', 'green');
   }
   closeModal();
@@ -1350,19 +1350,19 @@ window.saveLesson = async (id) => {
 window.toggleHide = async (id) => {
   const l = lessons[id];
   if (!l) return;
-  await update(ref(db, 'lessons/' + id), { hidden: !l.hidden });
+  await db.ref('lessons/' + id).update({ hidden: !l.hidden });
   showToast(l.hidden ? '👁 Заняття показано' : '🙈 Заняття приховано', 'green');
 };
 
 window.archiveLesson = async (id) => {
   const l = lessons[id];
   if (!l) return;
-  await update(ref(db, 'lessons/' + id), { archived: true });
+  await db.ref('lessons/' + id).update({ archived: true });
   showToast('📦 Заняття в архіві', 'green');
 };
 
 window.restoreLesson = async (id) => {
-  await update(ref(db, 'lessons/' + id), { archived: false });
+  await db.ref('lessons/' + id).update({ archived: false });
   showToast('✅ Заняття відновлено', 'green');
   openArchive(); // refresh archive modal
 };
@@ -1445,7 +1445,7 @@ window.addCatalogItem = async () => {
   const isSubjects = catalogActiveTab === 'subjects';
   const fbRef = isSubjects ? subjectsRef : teachersRef;
   const item = isSubjects ? { name, code } : { name, title: code };
-  await push(fbRef, item);
+  await fbRef.push(item);
   showToast('✅ Додано', 'green');
   renderCatalogModal();
 };
@@ -1454,13 +1454,13 @@ window.addGroupFromCatalog = async () => {
   const name = document.getElementById('catName').value.trim();
   if (!name) { document.getElementById('catName').focus(); return; }
   if (getGroups().includes(name)) { alert('Група «' + name + '» вже існує'); return; }
-  await set(ref(db, 'groups/' + name), true);
+  await db.ref('groups/' + name).set(true);
   showToast('✅ Група «' + name + '» додана', 'green');
   renderCatalogModal();
 };
 
 window.deleteGroup = async (name) => {
-  await remove(ref(db, 'groups/' + name));
+  await db.ref('groups/' + name).remove();
   // Also remove from all lessons
   const updates = {};
   Object.entries(lessons).forEach(([id, l]) => {
@@ -1469,7 +1469,7 @@ window.deleteGroup = async (name) => {
       updates['lessons/' + id + '/group'] = g.filter(x => x !== name);
     }
   });
-  if (Object.keys(updates).length) await update(ref(db), updates);
+  if (Object.keys(updates).length) await db.ref().update(updates);
   showToast('🗑 Групу видалено', 'red');
   renderCatalogModal();
   renderGroupTabs();
@@ -1477,7 +1477,7 @@ window.deleteGroup = async (name) => {
 
 window.deleteCatalogItem = async (id) => {
   const isSubjects = catalogActiveTab === 'subjects';
-  await remove(ref(db, (isSubjects ? 'catalog/subjects/' : 'catalog/teachers/') + id));
+  await db.ref((isSubjects ? 'catalog/subjects/' : 'catalog/teachers/') + id).remove();
   showToast('🗑 Видалено', 'red');
   renderCatalogModal();
 };
@@ -1520,7 +1520,7 @@ window.confirmDelete = (id) => {
   document.getElementById('overlay').classList.add('open');
 };
 window.deleteLesson = async (id) => {
-  await remove(ref(db, 'lessons/' + id));
+  await db.ref('lessons/' + id).remove();
   closeModal();
   showToast('🗑 Заняття видалено', 'red');
 };
@@ -1554,7 +1554,7 @@ window.doLogin = async () => {
   const email = document.getElementById('loginEmail').value.trim();
   const pass = document.getElementById('loginPass').value;
   try {
-    await signInWithEmailAndPassword(auth, email, pass);
+    await auth.signInWithEmailAndPassword(email, pass);
     closeModal();
     showToast('👋 Ласкаво просимо, адміністратор!', 'green');
   } catch {
@@ -1562,7 +1562,7 @@ window.doLogin = async () => {
   }
 };
 window.doLogout = async () => {
-  await signOut(auth);
+  await auth.signOut();
   showToast('👋 Ви вийшли з системи', 'red');
 };
 
