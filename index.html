@@ -1254,11 +1254,13 @@ function render() {
       entries = entries.filter(([, l]) => !l.hidden);
     }
 
-    // Фільтр тижня (щотижня або відповідний тиждень)
-    const visibleEntries = entries.filter(([, l]) => {
-      if (!l.week || l.week === 'all') return true;
-      return parseInt(l.week) === currentWeek;
-    });
+    // Фільтр тижня: студент бачить лише поточний тиждень, адмін — всі
+    const visibleEntries = isAdmin
+      ? entries
+      : entries.filter(([, l]) => {
+          if (!l.week || l.week === 'all') return true;
+          return parseInt(l.week) === currentWeek;
+        });
 
     // Будуємо map: час → заняття
     const lessonsByTime = {};
@@ -1450,23 +1452,31 @@ window.saveLesson = async (id) => {
   const group = [...checkboxes].filter(c => c.checked && c.value).map(c => c.value);
 
   // ── Перевірка конфлікту викладача ──
+  // Конфлікт = той самий викладач, той самий день, та сама пара, і тижні перекриваються
+  // Тижні перекриваються якщо: хоча б одне з них "all", або обидва однакові
+  // Виняток: якщо тижні НЕ 'all' і вони різні (1 vs 2) — не конфлікт (різні тижні чергування)
   if (teacher) {
+    const weeksOverlap = (w1, w2) => {
+      if (w1 === 'all' || w2 === 'all') return true;
+      return w1 === w2;
+    };
+
     const conflict = Object.entries(lessons).find(([lid, l]) => {
-      if (lid === id) return false; // пропускаємо себе при редагуванні
+      if (lid === id) return false;
       if (l.archived || l.hidden) return false;
       if (l.teacher !== teacher) return false;
       if (l.day !== day) return false;
       if (l.time !== time) return false;
-      // Перевіряємо тиждень: конфлікт лише якщо тижні перекриваються
-      const thisWeek = week;
-      const otherWeek = l.week || 'all';
-      if (thisWeek !== 'all' && otherWeek !== 'all' && thisWeek !== otherWeek) return false;
+      if (!weeksOverlap(week, l.week || 'all')) return false;
       return true;
     });
+
     if (conflict) {
       const cl = conflict[1];
       const periodLabel = PERIODS.find(p => p.start === time);
-      alert(`⚠️ Конфлікт! Викладач "${teacher}" вже веде заняття "${cl.subject}" у ${day} на ${periodLabel ? periodLabel.num + ' парі' : time}.\n\nВикладач не може мати два заняття одночасно.`);
+      const clGroups = Array.isArray(cl.group) ? cl.group : (cl.group ? [cl.group] : []);
+      const clGroupStr = clGroups.length ? ` (${clGroups.join(', ')})` : ' (спільне)';
+      alert(`⚠️ Конфлікт розкладу!\n\nВикладач "${teacher}" вже має заняття у цей час:\n"${cl.subject}"${clGroupStr} — ${cl.day}, ${periodLabel ? periodLabel.num + ' пара' : time}\n\nВикладач не може вести два заняття одночасно.`);
       return;
     }
   }
