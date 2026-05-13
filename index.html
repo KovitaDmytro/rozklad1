@@ -1726,22 +1726,15 @@ function renderCatalogModal() {
     listHTML = Object.entries(items).length
       ? Object.entries(items).map(([id, item]) => `
           <div class="catalog-item" data-cid="${id}" data-cname="${(item.name||'').replace(/"/g,'&quot;')}" data-ctype="${isSubjects ? 'subjects' : 'teachers'}">
-            <div class="catalog-item-info" style="flex:1">
-              <div class="cname-view" style="display:flex;flex-direction:column;gap:1px">
-                <div class="catalog-item-name">${item.name}</div>
-                ${item.code ? '<div class="catalog-item-sub">' + item.code + '</div>' : ''}
-                ${item.title ? '<div class="catalog-item-sub">' + item.title + '</div>' : ''}
-              </div>
-              <div class="cname-edit" style="display:none;align-items:center;gap:6px;margin-top:4px">
-                <input class="cinput" value="${(item.name||'').replace(/"/g,'&quot;')}" maxlength="80"
-                  style="padding:5px 10px;border-radius:10px;border:1px solid rgba(29,158,117,0.4);background:rgba(255,255,255,0.6);font-size:13px;font-weight:600;font-family:inherit;outline:none;flex:1" />
-                <button class="cbtn-save" style="padding:5px 10px;border-radius:100px;border:none;background:linear-gradient(135deg,#1D9E75,#0F6E56);color:white;font-size:12px;font-weight:700;cursor:pointer"><i class="ti ti-check"></i></button>
-                <button class="cbtn-cancel" style="padding:5px 10px;border-radius:100px;border:1px solid rgba(0,0,0,0.1);background:rgba(0,0,0,0.05);color:#666;font-size:12px;cursor:pointer"><i class="ti ti-x"></i></button>
-              </div>
+            <div class="catalog-item-info" style="flex:1;min-width:0">
+              <div class="catalog-item-name cname-text" contenteditable="false" spellcheck="false"
+                style="outline:none;border-radius:6px;padding:1px 4px;margin:-1px -4px;transition:background 0.15s">${item.name}</div>
+              ${item.code ? '<div class="catalog-item-sub">' + item.code + '</div>' : ''}
+              ${item.title ? '<div class="catalog-item-sub">' + item.title + '</div>' : ''}
             </div>
-            <div style="display:flex;gap:6px;flex-shrink:0">
-              <button class="btn-cat-edit cbtn-edit"><i class="ti ti-pencil"></i></button>
-              <button class="btn-cat-del cbtn-del"><i class="ti ti-trash"></i></button>
+            <div class="citem-actions" style="display:flex;gap:4px;flex-shrink:0">
+              <button class="btn-cat-edit cbtn-edit" title="Перейменувати"><i class="ti ti-pencil"></i></button>
+              <button class="btn-cat-del cbtn-del" title="Видалити"><i class="ti ti-trash"></i></button>
             </div>
           </div>`).join('')
       : '<div class="archive-empty"><i class="ti ti-database" style="font-size:28px;display:block;margin-bottom:8px;opacity:.3"></i>Список порожній</div>';
@@ -1831,33 +1824,64 @@ function renderCatalogModal() {
 
   // ── Bind subject / teacher edit events ──
   modal.querySelectorAll('.catalog-item[data-cid]').forEach(item => {
-    const cid   = item.dataset.cid;
-    const ctype = item.dataset.ctype; // 'subjects' or 'teachers'
+    const cid     = item.dataset.cid;
+    const ctype   = item.dataset.ctype;
     const origName = item.dataset.cname;
-    const view    = item.querySelector('.cname-view');
-    const editBox = item.querySelector('.cname-edit');
-    const inp     = item.querySelector('.cinput');
+    const nameEl  = item.querySelector('.cname-text');
+    const editBtn = item.querySelector('.cbtn-edit');
+    const delBtn  = item.querySelector('.cbtn-del');
+    let editing = false;
 
-    const showEdit = () => { view.style.display = 'none'; editBox.style.display = 'flex'; inp.focus(); inp.select(); };
-    const hideEdit = () => { view.style.display = 'flex'; editBox.style.display = 'none'; inp.value = origName; };
+    const startEdit = () => {
+      if (editing) return;
+      editing = true;
+      nameEl.contentEditable = 'true';
+      nameEl.style.background = 'rgba(255,255,255,0.75)';
+      nameEl.style.boxShadow = '0 0 0 2px rgba(29,158,117,0.4)';
+      nameEl.focus();
+      // Place cursor at end
+      const range = document.createRange();
+      range.selectNodeContents(nameEl);
+      range.collapse(false);
+      window.getSelection().removeAllRanges();
+      window.getSelection().addRange(range);
+      editBtn.innerHTML = '<i class="ti ti-check"></i>';
+      editBtn.title = 'Зберегти';
+      editBtn.style.background = 'rgba(29,158,117,0.15)';
+      editBtn.style.color = '#085041';
+      editBtn.style.borderColor = 'rgba(29,158,117,0.4)';
+    };
+
+    const cancelEdit = () => {
+      editing = false;
+      nameEl.contentEditable = 'false';
+      nameEl.textContent = origName;
+      nameEl.style.background = '';
+      nameEl.style.boxShadow = '';
+      editBtn.innerHTML = '<i class="ti ti-pencil"></i>';
+      editBtn.title = 'Перейменувати';
+      editBtn.style.background = '';
+      editBtn.style.color = '';
+      editBtn.style.borderColor = '';
+    };
 
     const doSave = async () => {
-      const newName = inp.value.trim();
-      if (!newName) { inp.focus(); return; }
-      if (newName === origName) { hideEdit(); return; }
+      if (!editing) { startEdit(); return; }
+      const newName = nameEl.textContent.trim();
+      if (!newName) { nameEl.focus(); return; }
+      if (newName === origName) { cancelEdit(); return; }
 
-      // 1. Update catalog entry
-      const fbPath = `catalog/${ctype}/${cid}`;
-      const field = ctype === 'subjects' ? 'name' : 'name';
-      await update(ref(db, fbPath), { [field]: newName });
+      nameEl.contentEditable = 'false';
+      nameEl.style.background = 'rgba(29,158,117,0.08)';
+      nameEl.style.boxShadow = '';
 
-      // 2. Mass-update all lessons that reference the old name
+      await update(ref(db, `catalog/${ctype}/${cid}`), { name: newName });
+
       const updates = {};
       if (ctype === 'subjects') {
         Object.entries(lessons).forEach(([lid, l]) => {
           if (l.subject === origName) {
             updates[`lessons/${lid}/subject`] = newName;
-            // Also update short name only if it matched the full name
             if (!l.short || l.short === origName) updates[`lessons/${lid}/short`] = newName;
           }
         });
@@ -1866,23 +1890,25 @@ function renderCatalogModal() {
           if (l.teacher === origName) updates[`lessons/${lid}/teacher`] = newName;
         });
       }
-
-      const count = Object.keys(updates).length;
-      if (count) await update(ref(db), updates);
+      const lessonCount = ctype === 'subjects'
+        ? Object.keys(updates).length / 2
+        : Object.keys(updates).length;
+      if (Object.keys(updates).length) await update(ref(db), updates);
 
       const label = ctype === 'subjects' ? 'Предмет' : 'Викладача';
-      showToast(`✅ ${label} перейменовано${count ? ` · оновлено ${Math.round(count / (ctype === 'subjects' ? 2 : 1))} занять` : ''}`, 'green');
+      showToast(`✅ ${label} перейменовано${lessonCount ? ` · ${Math.round(lessonCount)} занять оновлено` : ''}`, 'green');
       renderCatalogModal();
     };
 
-    item.querySelector('.cbtn-edit').addEventListener('click', showEdit);
-    item.querySelector('.cbtn-cancel').addEventListener('click', hideEdit);
-    item.querySelector('.cbtn-save').addEventListener('click', doSave);
-    inp.addEventListener('keydown', e => {
-      if (e.key === 'Enter') doSave();
-      if (e.key === 'Escape') hideEdit();
+    editBtn.addEventListener('click', doSave);
+    delBtn.addEventListener('click', () => deleteCatalogItem(cid));
+
+    nameEl.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); doSave(); }
+      if (e.key === 'Escape') cancelEdit();
     });
-    item.querySelector('.cbtn-del').addEventListener('click', () => deleteCatalogItem(cid));
+    // Start edit on double-click of name too
+    nameEl.addEventListener('dblclick', startEdit);
   });
 }
 
