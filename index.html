@@ -997,7 +997,7 @@ function updateLayout() {
     noGroupScreen.style.display = 'none';
     if (toolbar) toolbar.style.display = 'flex';
     if (grid) grid.style.display = '';
-    infoBar.style.display = 'flex';
+    infoBar.style.display = 'none';
     render();
     document.title = `Розклад — ${matched}`;
   } else {
@@ -1030,6 +1030,14 @@ function renderGroupTabs() {
   }
   const list = document.createElement('div');
   list.className = 'group-tabs-list' + (!isMobile || groupsExpanded ? ' open' : '');
+
+  // "Всі" таб
+  const allBtn = document.createElement('button');
+  allBtn.className = 'group-tab all-tab' + (activeGroup === 'all' ? ' active' : '');
+  allBtn.textContent = 'Всі';
+  allBtn.addEventListener('click', () => { activeGroup = 'all'; renderGroupTabs(); render(); });
+  list.appendChild(allBtn);
+
   groups.forEach(g => {
     const btn = document.createElement('button');
     btn.className = 'group-tab' + (activeGroup === g ? ' active' : '');
@@ -1059,9 +1067,7 @@ onValue(lessonsRef, (snap) => {
     const matched = getGroupBySlug(slug, getGroups());
     if (matched) activeGroup = matched;
   } else if (isAdmin && activeGroup === 'all') {
-    // Адмін: якщо ще не обрана — перша група
-    const groups = getGroups();
-    if (groups.length > 0) { activeGroup = groups[0]; groupsExpanded = true; }
+    // Адмін: залишаємо 'all' — покаже всі заняття
   }
   updateLayout();
 });
