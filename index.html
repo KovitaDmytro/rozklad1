@@ -939,11 +939,14 @@ function dbUrl(path, token) {
 const db = {
   async get(path) {
     try {
-      const res = await fetch(dbUrl(path, null));
+      const res = await fetch(dbUrl(path, _idToken));
       if (res.ok) {
         const data = await res.json();
         return data;
       }
+      // якщо з токеном не вийшло — спробувати без
+      const res2 = await fetch(dbUrl(path, null));
+      if (res2.ok) return await res2.json();
       return null;
     } catch(e) {
       return null;
@@ -1179,6 +1182,10 @@ function startDataListeners() {
   if (_dataLoaded) return;
   _dataLoaded = true;
 
+  // Зупиняємо старі listeners якщо є
+  Object.values(_listeners).forEach(l => { if (l.interval) clearInterval(l.interval); });
+  _listeners = {};
+
   db.on(settingsRef, (d) => {
     appSettings = d || {};
     semesterStart = appSettings.semesterStart || null;
@@ -1201,14 +1208,17 @@ function startDataListeners() {
 
 auth.onAuthStateChanged((user) => {
   isAdmin = !!user;
-  const isAdminURL = new URLSearchParams(window.location.search).has('admin');
   document.getElementById('adminBadge').style.display  = isAdmin ? 'inline-flex' : 'none';
-  document.getElementById('loginBtn').style.display    = isAdmin ? 'none' : 'flex';
+  // Кнопку "Вхід" показуємо тільки якщо немає ?group= (тобто це адмін-сторінка)
+  const hasGroup = new URLSearchParams(window.location.search).has('group');
+  document.getElementById('loginBtn').style.display    = isAdmin ? 'none' : (hasGroup ? 'none' : 'flex');
   document.getElementById('logoutBtn').style.display   = isAdmin ? 'flex' : 'none';
   document.getElementById('addBtn').style.display      = isAdmin ? 'flex' : 'none';
   document.getElementById('catalogBtn').style.display  = isAdmin ? 'flex' : 'none';
   document.getElementById('groupsBtn').style.display   = isAdmin ? 'flex' : 'none';
   document.getElementById('archiveBtn').style.display  = isAdmin ? 'flex' : 'none';
+  // Після auth — примусово перезавантажуємо дані з токеном
+  _dataLoaded = false;
   startDataListeners();
   updateLayout();
 });
