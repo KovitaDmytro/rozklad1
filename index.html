@@ -806,7 +806,7 @@
 <div class="header">
   <div style="display:flex;align-items:center;gap:10px">
     <div class="logo">
-      <div class="logo-icon"><i class="ti ti-calendar-event"></i></div>
+      <div class="logo-icon" id="logoIcon"><i class="ti ti-calendar-event"></i></div>
       Розклад
     </div>
     <span class="admin-badge" id="adminBadge"><i class="ti ti-shield-check"></i> Адмін</span>
@@ -997,7 +997,7 @@ function updateLayout() {
     noGroupScreen.style.display = 'none';
     if (toolbar) toolbar.style.display = 'flex';
     if (grid) grid.style.display = '';
-    infoBar.style.display = 'none';
+    infoBar.style.display = 'flex';
     render();
     document.title = `Розклад — ${matched}`;
   } else {
@@ -1030,14 +1030,6 @@ function renderGroupTabs() {
   }
   const list = document.createElement('div');
   list.className = 'group-tabs-list' + (!isMobile || groupsExpanded ? ' open' : '');
-
-  // "Всі" таб
-  const allBtn = document.createElement('button');
-  allBtn.className = 'group-tab all-tab' + (activeGroup === 'all' ? ' active' : '');
-  allBtn.textContent = 'Всі';
-  allBtn.addEventListener('click', () => { activeGroup = 'all'; renderGroupTabs(); render(); });
-  list.appendChild(allBtn);
-
   groups.forEach(g => {
     const btn = document.createElement('button');
     btn.className = 'group-tab' + (activeGroup === g ? ' active' : '');
@@ -1067,7 +1059,9 @@ onValue(lessonsRef, (snap) => {
     const matched = getGroupBySlug(slug, getGroups());
     if (matched) activeGroup = matched;
   } else if (isAdmin && activeGroup === 'all') {
-    // Адмін: залишаємо 'all' — покаже всі заняття
+    // Адмін: якщо ще не обрана — перша група
+    const groups = getGroups();
+    if (groups.length > 0) { activeGroup = groups[0]; groupsExpanded = true; }
   }
   updateLayout();
 });
@@ -1087,9 +1081,8 @@ function shortenTeacher(full) {
 
 onAuthStateChanged(auth, (user) => {
   isAdmin = !!user;
-  const isAdminURL = new URLSearchParams(window.location.search).has('admin');
   document.getElementById('adminBadge').style.display  = isAdmin ? 'inline-flex' : 'none';
-  document.getElementById('loginBtn').style.display    = isAdmin ? 'none' : (isAdminURL ? 'flex' : 'none');
+  document.getElementById('loginBtn').style.display    = isAdmin ? 'none' : 'none'; // hidden; revealed by secret tap
   document.getElementById('logoutBtn').style.display   = isAdmin ? 'flex' : 'none';
   document.getElementById('addBtn').style.display      = isAdmin ? 'flex' : 'none';
   document.getElementById('catalogBtn').style.display  = isAdmin ? 'flex' : 'none';
@@ -1803,6 +1796,19 @@ window.doExport = async () => {
 
 // Auto-refresh highlighting every minute
 setInterval(() => { render(); }, 60000);
+
+// Secret tap on logo icon (5 taps) to reveal admin login
+let logoTapCount = 0, logoTapTimer = null;
+document.getElementById('logoIcon').addEventListener('click', () => {
+  logoTapCount++;
+  clearTimeout(logoTapTimer);
+  if (logoTapCount >= 5) {
+    document.getElementById('loginBtn').style.display = 'flex';
+    logoTapCount = 0;
+  } else {
+    logoTapTimer = setTimeout(() => { logoTapCount = 0; }, 1500);
+  }
+});
 function showToast(msg, type) {
   const t = document.getElementById('toast');
   document.getElementById('toastMsg').textContent = msg;
