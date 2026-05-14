@@ -1102,7 +1102,14 @@ function getPeriodByTime(time) {
 // ── URL slug helpers ──────────────────────────────────
 // (slugify/getGroupBySlug видалено — замінено на числові ID)
 function getGroupFromURL() {
-  return new URLSearchParams(window.location.search).get('group');
+  const param = new URLSearchParams(window.location.search).get('group');
+  if (param) {
+    // Запам'ятовуємо групу — щоб PWA відкривалась правильно без ?group=
+    localStorage.setItem('pwa-group', param);
+    return param;
+  }
+  // Якщо URL-параметра немає (PWA запущена з головного екрана) — беремо збережену
+  return localStorage.getItem('pwa-group') || null;
 }
 
 // ── Отримуємо унікальні групи ─────────────────────────
