@@ -920,7 +920,6 @@
   </div>
   <div class="header-actions">
     <button class="glass-btn login-btn" id="loginBtn" onclick="openLogin()" style="display:none"><i class="ti ti-lock"></i> Вхід адміну</button>
-    <button class="glass-btn" id="archiveBtn" onclick="openArchiveView()" style="display:none"><i class="ti ti-archive"></i> Архів</button>
     <button class="glass-btn" id="catalogBtn" onclick="openCatalog()" style="display:none"><i class="ti ti-books"></i> Каталог</button>
     <button class="glass-btn" id="groupsBtn" onclick="openGroupLinks()" style="display:none"><i class="ti ti-link"></i> Посилання</button>
     <button class="glass-btn" id="settingsBtn" onclick="openSettings()" style="display:none"><i class="ti ti-calendar-cog"></i> Налаштування</button>
@@ -1005,8 +1004,6 @@ const lessonsRef = ref(db, 'lessons');
 const subjectsRef = ref(db, 'catalog/subjects');
 const teachersRef = ref(db, 'catalog/teachers');
 const settingsRef = ref(db, 'settings');
-const archiveRef  = ref(db, 'archive');
-let archives = {}; // { semId: { name, date, lessons: {...} } }
 
 // ── Пари ─────────────────────────────────────────────
 const PERIODS = [
@@ -1183,7 +1180,6 @@ onValue(ref(db, 'groups'), (snap) => {
   extraGroups = snap.val() || {};
   updateLayout();
 });
-onValue(archiveRef, (snap) => { archives = snap.val() || {}; });
 onValue(lessonsRef, (snap) => {
   lessons = snap.val() || {};
   const slug = getGroupFromURL();
@@ -1210,7 +1206,6 @@ onAuthStateChanged(auth, (user) => {
   document.getElementById('catalogBtn').style.display  = isAdmin ? 'flex' : 'none';
   document.getElementById('groupsBtn').style.display   = isAdmin ? 'flex' : 'none';
   document.getElementById('settingsBtn').style.display = isAdmin ? 'flex' : 'none';
-  document.getElementById('archiveBtn').style.display  = 'flex';
   updateLayout();
 });
 
@@ -2270,46 +2265,22 @@ window.openSettings = () => {
   const cur = semesterStart || '';
   const fmt = cur ? new Date(cur).toLocaleDateString('uk-UA', {day:'numeric', month:'long', year:'numeric'}) : 'не вказано';
   const curWeek = semesterStart ? getCurrentWeekNum() : null;
-  const weekInfo = curWeek
-    ? `<div style="margin-top:8px;font-size:12px;color:#085041;background:rgba(29,158,117,0.1);padding:8px 12px;border-radius:10px;border:1px solid rgba(29,158,117,0.2)"><i class="ti ti-info-circle"></i> Зараз <strong>${curWeek}-й навчальний тиждень</strong></div>`
-    : `<div style="margin-top:8px;font-size:12px;color:#922;background:rgba(220,80,80,0.08);padding:8px 12px;border-radius:10px;border:1px solid rgba(220,80,80,0.2)"><i class="ti ti-alert-triangle"></i> Дата початку не встановлена — тиждень не визначено</div>`;
-
-  const archiveCount = Object.keys(archives).length;
-
+  const weekInfo = curWeek ? `<div style="margin-top:8px;font-size:12px;color:#085041;background:rgba(29,158,117,0.1);padding:8px 12px;border-radius:10px;border:1px solid rgba(29,158,117,0.2)"><i class="ti ti-info-circle"></i> Зараз <strong>${curWeek}-й навчальний тиждень</strong></div>` : '<div style="margin-top:8px;font-size:12px;color:#922;background:rgba(220,80,80,0.08);padding:8px 12px;border-radius:10px;border:1px solid rgba(220,80,80,0.2)"><i class="ti ti-alert-triangle"></i> Дата початку не встановлена — тиждень не визначено</div>';
   document.getElementById('modal').innerHTML = `
     <div class="modal-title"><i class="ti ti-calendar-cog"></i> Налаштування семестру</div>
-
     <div class="field">
       <label>Дата початку навчання (1-й тиждень)</label>
       <input id="fSemStart" type="date" value="${cur}" style="font-size:15px">
       <div style="margin-top:6px;font-size:12px;color:var(--text-secondary)">Поточне значення: <strong>${fmt}</strong></div>
       ${weekInfo}
     </div>
-    <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:18px;line-height:1.6">
-      Ця дата визначає 1-й та 2-й тижні для всіх груп.
+    <div style="font-size:11px;color:var(--text-tertiary);margin-top:4px;line-height:1.6">
+      Ця дата визначає 1-й та 2-й тижні для всіх груп.<br>
+      Тиждень відраховується від понеділка цього тижня.
     </div>
-
-    <div style="border-top:1px solid rgba(0,0,0,0.07);padding-top:16px;margin-bottom:4px">
-      <div style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:4px;display:flex;align-items:center;gap:7px">
-        <i class="ti ti-archive" style="color:#1D9E75"></i> Архів семестрів
-        ${archiveCount ? `<span style="font-size:11px;font-weight:700;background:rgba(29,158,117,0.12);color:#085041;padding:2px 9px;border-radius:100px">${archiveCount} збережено</span>` : ''}
-      </div>
-      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;line-height:1.6">
-        Збережіть поточний розклад в архів перед тим як почати новий семестр. Студенти зможуть переглянути старі розклади.
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <input id="fArchiveName" placeholder="Назва, напр.: Осінь 2024–2025"
-          style="flex:1;min-width:180px;padding:8px 12px;border-radius:12px;border:1px solid rgba(0,0,0,0.1);background:rgba(255,255,255,0.55);font-size:13px;font-family:inherit;outline:none">
-        <button onclick="archiveSemester()" style="flex-shrink:0;padding:9px 16px;border-radius:12px;border:none;background:linear-gradient(135deg,#1D9E75,#0F6E56);color:white;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px">
-          <i class="ti ti-archive" style="font-size:14px"></i> Зберегти в архів
-        </button>
-      </div>
-      ${archiveCount ? `<button onclick="closeModal();setTimeout(openArchiveView,100)" style="margin-top:10px;background:none;border:none;color:#1D9E75;font-size:12px;font-weight:700;cursor:pointer;padding:0;display:flex;align-items:center;gap:5px"><i class="ti ti-chevron-right" style="font-size:12px"></i> Переглянути архів (${archiveCount})</button>` : ''}
-    </div>
-
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal()">Скасувати</button>
-      <button class="btn-save" onclick="saveSettings()"><i class="ti ti-device-floppy"></i> Зберегти дату</button>
+      <button class="btn-save" onclick="saveSettings()"><i class="ti ti-device-floppy"></i> Зберегти</button>
     </div>`;
   document.getElementById('overlay').classList.add('open');
 };
@@ -2327,113 +2298,6 @@ window.saveSettings = async () => {
     console.error('saveSettings error:', e);
     alert('❌ Помилка збереження: ' + (e.message || e));
   }
-};
-
-// ── ARCHIVE ─────────────────────────────────────────
-
-window.openArchiveView = () => {
-  const semList = Object.entries(archives).sort((a,b) => b[1].date.localeCompare(a[1].date));
-  const listHTML = semList.length
-    ? semList.map(([sid, sem]) => {
-        const d = new Date(sem.date).toLocaleDateString('uk-UA', {day:'numeric', month:'long', year:'numeric'});
-        const cnt = Object.keys(sem.lessons || {}).length;
-        return `
-          <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,0.45);border:1px solid rgba(255,255,255,0.6);margin-bottom:8px;cursor:pointer;transition:background .15s"
-            onclick="openArchiveSemester('${sid}')"
-            onmouseover="this.style.background='rgba(255,255,255,0.65)'"
-            onmouseout="this.style.background='rgba(255,255,255,0.45)'">
-            <div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#1D9E75,#0a5c43);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-              <i class="ti ti-archive" style="color:white;font-size:18px"></i>
-            </div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:14px;font-weight:700;color:var(--text-primary)">${sem.name}</div>
-              <div style="font-size:12px;color:var(--text-secondary);margin-top:2px">Архівовано ${d} · ${cnt} занять</div>
-            </div>
-            <i class="ti ti-chevron-right" style="color:var(--text-tertiary);font-size:18px;flex-shrink:0"></i>
-          </div>`;
-      }).join('')
-    : `<div style="text-align:center;padding:40px 0;color:var(--text-secondary)">
-        <i class="ti ti-archive" style="font-size:36px;display:block;margin-bottom:10px;opacity:.3"></i>
-        <div style="font-size:14px;font-weight:600;margin-bottom:6px">Архів порожній</div>
-        <div style="font-size:12px;opacity:.7">Закрийте семестр у Налаштуваннях щоб зберегти розклад</div>
-       </div>`;
-
-  document.getElementById('modal').innerHTML = `
-    <div class="modal-title"><i class="ti ti-archive"></i> Архів семестрів</div>
-    <div style="max-height:400px;overflow-y:auto;padding-right:2px">${listHTML}</div>
-    <div class="modal-actions" style="margin-top:12px">
-      <button class="btn-cancel" onclick="closeModal()">Закрити</button>
-    </div>`;
-  document.getElementById('overlay').classList.add('open');
-};
-
-window.openArchiveSemester = (sid) => {
-  const sem = archives[sid];
-  if (!sem) return;
-  const lessonList = sem.lessons || {};
-  const days = ['Понеділок','Вівторок','Середа','Четвер','Пятниця','Субота'];
-  const typeLabelsA = {lec:'Лекція',prac:'Практика',lab:'Лабораторна',sem:'Семінар'};
-  const typeBgA = {lec:'#d6e7fb',prac:'#d1f5e6',lab:'#faeeda',sem:'#dcdafe'};
-  const typeClA = {lec:'#0C447C',prac:'#085041',lab:'#633806',sem:'#3C3489'};
-
-  let html = '';
-  days.forEach(day => {
-    const entries = Object.values(lessonList)
-      .filter(l => l.day === day)
-      .sort((a,b) => (a.time||'').localeCompare(b.time||''));
-    if (!entries.length) return;
-    html += `<div style="margin-bottom:12px">
-      <div style="font-size:12px;font-weight:800;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;padding:4px 0 8px">${day}</div>`;
-    entries.forEach(l => {
-      const bg = typeBgA[l.type] || '#f5f5f5';
-      const cl = typeClA[l.type] || '#333';
-      const lbl = typeLabelsA[l.type] || l.type;
-      html += `<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:12px;background:rgba(255,255,255,0.45);border:1px solid rgba(255,255,255,0.6);margin-bottom:6px">
-        <div style="min-width:44px;font-size:12px;font-weight:700;color:var(--text-primary);flex-shrink:0">${l.time||''}</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:700;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${l.subject||''}</div>
-          <div style="font-size:11px;color:var(--text-secondary);margin-top:1px">${l.teacher||''} · ауд. ${l.room||'—'}</div>
-        </div>
-        <span style="font-size:11px;padding:3px 8px;border-radius:100px;background:${bg};color:${cl};font-weight:700;white-space:nowrap;flex-shrink:0">${lbl}</span>
-      </div>`;
-    });
-    html += '</div>';
-  });
-
-  document.getElementById('modal').innerHTML = `
-    <div class="modal-title" style="gap:8px">
-      <button onclick="openArchiveView()" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);font-size:18px;padding:0;display:flex;align-items:center" title="Назад"><i class="ti ti-arrow-left"></i></button>
-      <i class="ti ti-archive"></i> ${sem.name}
-    </div>
-    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:14px">
-      Архівовано ${new Date(sem.date).toLocaleDateString('uk-UA',{day:'numeric',month:'long',year:'numeric'})} · ${Object.keys(lessonList).length} занять
-      ${isAdmin ? `<button onclick="deleteArchiveSemester('${sid}')" style="margin-left:12px;background:rgba(220,80,80,0.1);border:1px solid rgba(220,80,80,0.25);color:#922;padding:3px 10px;border-radius:100px;font-size:11px;font-weight:700;cursor:pointer"><i class="ti ti-trash" style="font-size:11px"></i> Видалити</button>` : ''}
-    </div>
-    <div style="max-height:380px;overflow-y:auto;padding-right:2px">${html || '<div style="text-align:center;padding:30px 0;color:var(--text-secondary);font-size:13px">Занять немає</div>'}</div>
-    <div class="modal-actions" style="margin-top:12px">
-      <button class="btn-cancel" onclick="closeModal()">Закрити</button>
-    </div>`;
-};
-
-window.deleteArchiveSemester = async (sid) => {
-  if (!confirm('Видалити цей семестр з архіву? Це незворотньо.')) return;
-  await remove(ref(db, 'archive/' + sid));
-  showToast('🗑️ Семестр видалено з архіву', 'red');
-  openArchiveView();
-};
-
-window.archiveSemester = async () => {
-  const name = document.getElementById('fArchiveName')?.value?.trim();
-  if (!name) { alert('Введіть назву семестру'); return; }
-  const lessonsCopy = JSON.parse(JSON.stringify(lessons));
-  const semId = 'sem_' + Date.now();
-  await set(ref(db, 'archive/' + semId), {
-    name,
-    date: new Date().toISOString().slice(0,10),
-    lessons: lessonsCopy
-  });
-  showToast('✅ Семестр збережено в архів', 'green');
-  openSettings();
 };
 
 function showToast(msg, type) {
