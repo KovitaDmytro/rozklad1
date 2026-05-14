@@ -956,13 +956,32 @@
   </div>
 
   <!-- No-group landing — shown if no ?group= param and not admin -->
-  <div id="noGroupScreen" style="display:none;padding:32px 20px">
-    <div style="text-align:center;margin-bottom:28px">
-      <div style="font-size:40px;margin-bottom:12px">📅</div>
-      <div style="font-size:20px;font-weight:800;color:var(--text-primary);margin-bottom:6px">Розклад занять</div>
-      <div style="font-size:14px;color:var(--text-secondary)">Обери свою групу</div>
+  <div id="noGroupScreen" style="display:none;padding:48px 24px;text-align:center">
+    <div style="font-size:48px;margin-bottom:16px">📅</div>
+    <div style="font-size:20px;font-weight:800;color:var(--text-primary);margin-bottom:8px">Розклад занять</div>
+    <div style="font-size:14px;color:var(--text-secondary);line-height:1.6;margin-bottom:32px">
+      Введи код групи, який надав адміністратор
     </div>
-    <div id="groupPickerList" style="display:flex;flex-direction:column;gap:10px;max-width:400px;margin:0 auto"></div>
+    <div style="max-width:320px;margin:0 auto;display:flex;flex-direction:column;gap:12px">
+      <input id="groupCodeInput" type="text" inputmode="numeric" pattern="[0-9]*"
+        placeholder="Код групи (6 цифр)"
+        style="
+          padding:14px 18px;border-radius:14px;border:1.5px solid rgba(255,255,255,0.5);
+          background:rgba(255,255,255,0.3);backdrop-filter:blur(12px);
+          font-size:18px;font-weight:600;letter-spacing:4px;text-align:center;
+          color:var(--text-primary);outline:none;width:100%;box-sizing:border-box;
+        "
+        oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,6)"
+        onkeydown="if(event.key==='Enter')enterGroupCode()"
+      />
+      <div id="groupCodeError" style="font-size:13px;color:#e53e3e;min-height:18px"></div>
+      <button onclick="enterGroupCode()" style="
+        padding:14px;border-radius:14px;border:none;
+        background:linear-gradient(135deg,#1D9E75,#0F6E56);
+        color:white;font-size:15px;font-weight:700;cursor:pointer;
+        box-shadow:0 4px 14px rgba(29,158,117,0.4);
+      ">Увійти</button>
+    </div>
   </div>
 
   <div class="toolbar" id="toolbar">
@@ -1113,9 +1132,23 @@ function getGroupFromURL() {
   return localStorage.getItem('pwa-group') || null;
 }
 
-function pickGroup(id, name) {
-  localStorage.setItem('pwa-group', id);
-  activeGroup = name;
+function enterGroupCode() {
+  const input = document.getElementById('groupCodeInput');
+  const error = document.getElementById('groupCodeError');
+  const code = (input ? input.value : '').trim();
+  if (!code || code.length < 6) {
+    if (error) error.textContent = 'Введи 6-значний код групи';
+    return;
+  }
+  // Шукаємо групу за ID
+  const group = getGroups().find(g => String(g.id) === code);
+  if (!group) {
+    if (error) error.textContent = 'Групу не знайдено. Перевір код.';
+    return;
+  }
+  localStorage.setItem('pwa-group', code);
+  activeGroup = group.name;
+  if (error) error.textContent = '';
   updateLayout();
 }
 
@@ -1200,31 +1233,7 @@ function updateLayout() {
     if (grid) grid.style.display = 'none';
     document.title = 'Розклад занять';
 
-    // Рендеримо список груп для вибору
-    const picker = document.getElementById('groupPickerList');
-    if (picker) {
-      const groups = getGroups();
-      if (groups.length === 0) {
-        picker.innerHTML = '<div style="text-align:center;font-size:14px;color:var(--text-secondary)">Групи ще не додані</div>';
-      } else {
-        picker.innerHTML = groups.map(g => `
-          <button onclick="pickGroup('${g.id}','${g.name.replace(/'/g,"\'")}')" style="
-            display:flex;align-items:center;gap:12px;
-            padding:14px 18px;border-radius:16px;
-            border:1px solid rgba(255,255,255,0.5);
-            background:rgba(255,255,255,0.25);
-            backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
-            cursor:pointer;font-size:15px;font-weight:700;
-            color:var(--text-primary);width:100%;text-align:left;
-            box-shadow:0 2px 8px rgba(0,0,0,0.06);
-            transition:all 0.18s;
-          " onmouseover="this.style.background='rgba(255,255,255,0.4)'" onmouseout="this.style.background='rgba(255,255,255,0.25)'">
-            <span style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#1D9E75,#0F6E56);display:flex;align-items:center;justify-content:center;color:white;font-size:16px;flex-shrink:0">👥</span>
-            <span>${g.name}</span>
-            <i class="ti ti-chevron-right" style="margin-left:auto;opacity:0.4;font-size:16px"></i>
-          </button>`).join('');
-      }
-    }
+
   }
 }
 
