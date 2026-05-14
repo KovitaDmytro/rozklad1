@@ -1,12 +1,11 @@
 // ── Service Worker: Розклад занять PWA ──
-const CACHE_NAME = 'rozklad-v2';
+const CACHE_NAME = 'rozklad-v3';
+const INDEX_URL = '/rozklad1/index.html';
 
-// ── Install: нічого не прекешуємо, просто активуємось ──
 self.addEventListener('install', event => {
   self.skipWaiting();
 });
 
-// ── Activate: видаляємо старі кеші ──
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
@@ -15,12 +14,11 @@ self.addEventListener('activate', event => {
   );
 });
 
-// ── Fetch ──
 self.addEventListener('fetch', event => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Firebase — не перехоплюємо взагалі
+  // Firebase — не перехоплюємо
   if (
     url.hostname.includes('firebaseio.com') ||
     url.hostname.includes('firebase.google.com') ||
@@ -29,25 +27,23 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // index.html — ЗАВЖДИ мережа першою, кеш тільки як fallback офлайн
+  // index.html — завжди мережа, кеш тільки офлайн
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
         .then(res => {
           if (res && res.status === 200) {
             const clone = res.clone();
-            caches.open(CACHE_NAME).then(c => c.put(request, clone));
+            caches.open(CACHE_NAME).then(c => c.put(INDEX_URL, clone));
           }
           return res;
         })
-        .catch(() => {
-          return caches.match(request) || caches.match('./index.html');
-        })
+        .catch(() => caches.match(INDEX_URL))
     );
     return;
   }
 
-  // CDN-ресурси — Cache-first (вони не змінюються)
+  // CDN — Cache-first
   if (
     url.hostname.includes('cdn.jsdelivr.net') ||
     url.hostname.includes('fonts.googleapis.com') ||
@@ -59,8 +55,7 @@ self.addEventListener('fetch', event => {
         if (cached) return cached;
         return fetch(request).then(res => {
           if (res && res.status === 200) {
-            const clone = res.clone();
-            caches.open(CACHE_NAME).then(c => c.put(request, clone));
+            caches.open(CACHE_NAME).then(c => c.put(request, res.clone()));
           }
           return res;
         }).catch(() => new Response('', { status: 503 }));
@@ -69,6 +64,5 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Все інше — мережа
   event.respondWith(fetch(request).catch(() => caches.match(request)));
 });

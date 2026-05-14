@@ -2,7 +2,8 @@
   "name": "Розклад занять",
   "short_name": "Розклад",
   "description": "Розклад занять для студентів",
-  "start_url": "./index.html",
+  "start_url": "/rozklad1/index.html",
+  "scope": "/rozklad1/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#c8eee0",
@@ -21,7 +22,5 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ],
-  "categories": ["education", "productivity"],
-  "screenshots": []
+  ]
 }
